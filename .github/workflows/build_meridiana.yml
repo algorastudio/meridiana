@@ -1,60 +1,106 @@
-name: Build and Package Meridiana
+name: Test and Build Meridiana
 
-# 1. Quando deve partire questa automazione?
 on:
   push:
-    branches: [ "main", "master" ] # Si attiva ad ogni caricamento sul ramo principale
+    branches: [ "main", "master" ]
   pull_request:
     branches: [ "main", "master" ]
-  workflow_dispatch: # Permette di avviare l'azione anche manualmente dal sito di GitHub
 
 jobs:
-  build-and-deploy:
-    # 2. Ambiente di esecuzione (Windows, necessario per Inno Setup e PyInstaller per Windows)
-    runs-on: windows-latest
+  # ==========================================
+  # FASE 1: TEST (Gira su Linux per velocità e supporto Docker)
+  # ==========================================
+  test-database-and-code:
+    runs-on: ubuntu-latest
+    
+    # Creiamo un database PostgreSQL temporaneo ("usa e getta")
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_DB: catasto_storico
+          POSTGRES_USER: postgres  # Sostituisca con l'utente del suo config.py
+          POSTGRES_PASSWORD: testpassword # Sostituisca con la password di test
+        # Esponiamo la porta standard di PostgreSQL
+        ports:
+          - 5432:5432
+        # GitHub aspetterà che il DB sia pronto prima di procedere
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
-    # 3. Scarica il codice dal repository
     - name: Checkout del codice
       uses: actions/checkout@v4
 
-    # 4. Installa Python sul server di GitHub
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.10' # Modifichi con la versione esatta che sta usando (es. 3.11)
+        python-version: '3.10'
 
-    # 5. Installa le librerie necessarie (PyQt5, Psycopg2, PyInstaller, ecc.)
-    - name: Installazione Dipendenze
+    - name: Installazione Dipendenze per i Test
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install -r tests/requirements-test.txt
-        pip install pyinstaller pytest
 
-    # 6. Esegue la suite di Test (Continuous Integration)
-    - name: Esecuzione Test Automatici
+    # Questo è il passaggio chiave: Popoliamo il DB temporaneo usando i SUOI script!
+    - name: Inizializzazione Database di Test
+      env:
+        PGPASSWORD: testpassword
+      run: |
+        # Installiamo il client PostgreSQL su Linux
+        sudo apt-get install -y postgresql-client
+        
+        # Lanciamo i suoi script SQL in ordine per creare tabelle e funzioni
+        # (Modifichi i nomi dei file se necessario in base alla sua cartella sql_scripts)
+        psql -h localhost -U postgres -d catasto_storico -f sql_scripts/02_creazione-schema-tabelle.sql
+        psql -h localhost -U postgres -d catasto_storico -f sql_scripts/03_funzioni-procedure.sql
+        psql -h localhost -U postgres -d catasto_storico -f sql_scripts/04b_dati_test_realistici.sql
+
+    - name: Esecuzione Test Automatici (Pytest)
+      env:
+        # Passiamo le credenziali di test al suo codice Python (config.py dovrà leggerle!)
+        DB_HOST: localhost
+        DB_USER: postgres
+        DB_PASS: testpassword
+        DB_NAME: catasto_storico
       run: |
         pytest tests/
-      # NOTA: Se i test richiedono un DB PostgreSQL reale attivo, questa fase potrebbe fallire. 
-      # In tal caso, disabiliti temporaneamente questo step o mi chieda come "mockare" il database.
 
-    # 7. Crea l'eseguibile standalone (.exe) con PyInstaller
+  # ==========================================
+  # FASE 2: BUILD (Gira su Windows SOLO se i test passano)
+  # ==========================================
+  build-windows:
+    # La riga seguente dice: "Non partire se il job 'test-database-and-code' fallisce!"
+    needs: test-database-and-code 
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout del codice
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Installazione Dipendenze
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+
     - name: Compilazione Eseguibile (PyInstaller)
-      run: |
-        pyinstaller meridiana.spec
+      run: pyinstaller meridiana.spec
       
-    # 8. Crea il file di installazione (setup.exe) con Inno Setup
-    # I runner Windows di GitHub hanno già Inno Setup (iscc) preinstallato!
     - name: Compilazione Installer (Inno Setup)
-      run: |
-        iscc Meridiana_Installer.iss
+      run: iscc Meridiana_Installer.iss
 
-    # 9. Carica l'installer finito in modo che lei possa scaricarlo da GitHub
     - name: Upload Installer Finito
       uses: actions/upload-artifact@v4
       with:
         name: Meridiana-Setup-Windows
-        # Assicurarsi che il percorso coincida con l'Outputdir definito nel suo file .iss
-        # Solitamente Inno Setup salva nella cartella "Output"
         path: Output\*.exe

@@ -27,7 +27,8 @@ class TestBasicSetup:
         """Verifica che pytest stia funzionando"""
         assert True
     
-    def test_fixture_access(self, mock_db_manager):
-        """Verifica accesso alle fixture"""
-        assert mock_db_manager is not None
-        assert hasattr(mock_db_manager, 'schema')
+    def test_fixture_access(self, db_manager):
+        """Verifica accesso alle fixture del database reale"""
+        assert db_manager is not None
+        # Verifica che il vero manager abbia il pool di connessioni
+        assert hasattr(db_manager, 'pool')
