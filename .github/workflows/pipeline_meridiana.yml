@@ -1,0 +1,99 @@
+name: CI/CD Meridiana (Test & Build)
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch: # Permette di avviare l'azione manualmente da GitHub
+
+jobs:
+  # ==========================================
+  # FASE 1: TEST (su Linux con PostgreSQL)
+  # ==========================================
+  test-database-and-code:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_DB: catasto_storico
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpassword
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout del codice
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Installazione Dipendenze
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r tests/requirements-test.txt
+
+    - name: Inizializzazione Database di Test
+      env:
+        PGPASSWORD: testpassword
+      run: |
+        sudo apt-get install -y postgresql-client
+        # Esegue i SUOI script originali per creare la struttura del db temporaneo
+        psql -h localhost -U postgres -d catasto_storico -f sql_scripts/02_creazione-schema-tabelle.sql
+        psql -h localhost -U postgres -d catasto_storico -f sql_scripts/03_funzioni-procedure.sql
+        # Aggiunga qui altri script se necessario (es. viste o dati di test)
+
+    - name: Esecuzione Test Automatici (Pytest)
+      env:
+        # Queste variabili verranno lette dal suo nuovo config.py e conftest.py
+        CI: true 
+        DB_HOST: localhost
+        DB_USER: postgres
+        DB_PASS: testpassword
+        DB_NAME: catasto_storico
+        DB_PORT: 5432
+      run: |
+        pytest tests/
+
+  # ==========================================
+  # FASE 2: BUILD (su Windows per Inno Setup)
+  # ==========================================
+  build-windows:
+    needs: test-database-and-code # Parte SOLO se i test sopra hanno successo
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout del codice
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Installazione Dipendenze per Build
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+
+    - name: Compilazione Eseguibile con PyInstaller
+      run: pyinstaller meridiana.spec
+      
+    - name: Compilazione Installer con Inno Setup
+      run: iscc Meridiana_Installer.iss
+
+    - name: Caricamento Installer Finito
+      uses: actions/upload-artifact@v4
+      with:
+        name: Meridiana-Setup-Windows
+        path: Output\*.exe
