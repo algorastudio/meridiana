@@ -62,7 +62,7 @@ jobs:
         DB_NAME: catasto_storico
         DB_PORT: 5432
       run: |
-        pytest tests/
+        pytest -m tests/
 
   # ==========================================
   # FASE 2: BUILD (su Windows per Inno Setup)
