@@ -1,0 +1,15 @@
+site_name: Manuale Meridiana 1.2
+theme:
+  name: material
+  palette:
+    primary: indigo
+
+nav:
+  - Home: index.md
+  - Primi Passi: primi-passi.md
+  - Inserimento Dati:
+      - Nuova Proprietà: registrazione-proprieta.md
+      - Nuova Partita: inserimento-partita.md
+  - Ricerca e Report:
+      - Ricerca Globale: ricerca.md
+      - Esportazioni (PDF/Excel): esportazioni.md  # <--- ECCO LA RIGA AGGIUNTA!
