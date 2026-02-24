@@ -96,8 +96,5 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: Meridiana-Setup-Windows
-        # Cerca l'eseguibile nella cartella Output, nella cartella dist e nella radice
-        path: |
-          Output\*.exe
-          dist\*.exe
-          *.exe
+        # Ora puntiamo alla cartella corretta definita nel file .iss!
+        path: Installer\*.exe
