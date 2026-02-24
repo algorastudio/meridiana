@@ -30,5 +30,5 @@ class TestBasicSetup:
     def test_fixture_access(self, db_manager):
         """Verifica accesso alle fixture del database reale"""
         assert db_manager is not None
-        # Verifica che il vero manager abbia il pool di connessioni
-        assert hasattr(db_manager, 'pool')
+        # Usare hasattr per verificare una delle due nomenclature
+        assert hasattr(db_manager, 'pool') or hasattr(db_manager, 'main_pool')

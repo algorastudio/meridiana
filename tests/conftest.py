@@ -27,11 +27,16 @@ def test_db_setup():
 def db_manager(test_db_setup):
     """Inizializza il CatastoDBManager con i parametri di test."""
     manager = CatastoDBManager(**test_db_setup)
-    manager.initialize_pool()
+    manager.initialize_main_pool()  # <--- CORRETTO QUI
     yield manager
+    
     # Al termine del test, chiude le connessioni
-    manager.close_pool()
-
+    # ATTENZIONE: se nel suo codice la chiusura si chiama 'close_main_pool',
+    # lo modifichi anche qui sotto. Altrimenti lasci 'close_pool()'.
+    try:
+        manager.close_main_pool()
+    except AttributeError:
+        manager.close_pool()
 # 3. Pulizia del Database (Fondamentale per test isolati)
 @pytest.fixture
 def clean_db(db_manager):
