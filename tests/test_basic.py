@@ -27,8 +27,8 @@ class TestBasicSetup:
         """Verifica che pytest stia funzionando"""
         assert True
     
+    # QUI LA CORREZIONE: chiede db_manager invece di mock_db_manager
     def test_fixture_access(self, db_manager):
         """Verifica accesso alle fixture del database reale"""
         assert db_manager is not None
-        # Usare hasattr per verificare una delle due nomenclature
         assert hasattr(db_manager, 'pool') or hasattr(db_manager, 'main_pool')
