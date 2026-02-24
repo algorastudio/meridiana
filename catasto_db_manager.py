@@ -294,7 +294,7 @@ class CatastoDBManager:
         self.logger.info("Chiusura temporanea del pool di connessioni per operazione di ripristino...")
         self.close_pool() # Chiude e nullifica self.pool
         return True # Assume successo; close_pool gestisce i suoi log
-    # In catasto_db_manager.py
+    # In catasto_db_manager.py 
 
     def reconnect_pool_if_needed(self) -> bool:
         """

@@ -1,5 +1,6 @@
 import logging,socket ,bcrypt,json, csv, os
 import sys
+from PyQt5.QtCore import QStandardPaths
 from PyQt5.QtWidgets import QMessageBox
 logger = logging.getLogger("CatastoGUI.app_utils")
 
@@ -755,22 +756,24 @@ import os # Assicurati che 'os' sia importato
 
 def _get_default_export_path(default_filename: str) -> str:
     """
-    Crea la sottocartella 'esportazioni' se non esiste e restituisce
+    Crea la sottocartella 'Esportazioni Meridiana' in Documenti se non esiste e restituisce
     il percorso completo per il file di default.
     """
-    # Definisce il nome della sottocartella
-    export_dir_name = "esportazioni"
+    # 1. Trova la cartella "Documenti" ufficiale dell'utente di Windows
+    cartella_documenti = QStandardPaths.writableLocation(QStandardPaths.DocumentsLocation)
     
-    # Crea il percorso completo della cartella (relativo alla posizione di esecuzione)
-    full_dir_path = os.path.abspath(export_dir_name)
+    # Fallback di sicurezza se per caso QStandardPaths fallisce
+    if not cartella_documenti:
+        cartella_documenti = os.path.expanduser("~")
+        
+    # 2. Definisce il percorso per la sottocartella dedicata
+    full_dir_path = os.path.join(cartella_documenti, "Esportazioni Meridiana")
     
-    # Crea la directory se non esiste, senza generare errori se esiste già
+    # 3. Crea la directory in Documenti (qui abbiamo sempre i permessi!)
     os.makedirs(full_dir_path, exist_ok=True)
     
-    # Unisce il percorso della cartella con il nome del file suggerito
+    # 4. Restituisce il percorso completo al file
     return os.path.join(full_dir_path, default_filename)
-# In app_utils.py, aggiungi questa nuova funzione
-
 def get_password_from_keyring(service_name: str, username: str) -> Optional[str]:
     """
     Recupera una password dal keyring di sistema in modo sicuro.
