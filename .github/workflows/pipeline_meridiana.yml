@@ -96,4 +96,8 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: Meridiana-Setup-Windows
-        path: Output\*.exe
+        # Cerca l'eseguibile nella cartella Output, nella cartella dist e nella radice
+        path: |
+          Output\*.exe
+          dist\*.exe
+          *.exe
