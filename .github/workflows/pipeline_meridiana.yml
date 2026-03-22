@@ -13,6 +13,7 @@ jobs:
   # ==========================================
   test-database-and-code:
     runs-on: ubuntu-latest
+    
 
     services:
       postgres:
@@ -69,6 +70,7 @@ jobs:
   build-windows:
     needs: test-database-and-code
     runs-on: windows-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
 
     steps:
     - name: Checkout del codice
@@ -96,7 +98,7 @@ jobs:
       with:
         name: Meridiana-Setup-Windows
         path: Installer\*.exe
-        retention-days: 7
+        retention-days: 1
 
   # ==========================================
   # FASE 3: RELEASE (solo su tag v*)
