@@ -130,7 +130,7 @@ class TestComuneManagerWidget:
         mock_dialog.return_value = ('Nuovo Comune', True)
         
         # Setup mock DB response
-        mock_db_manager.aggiungi_comune.return_value = 3
+        mock_db_manager.create_comune.return_value = 3
         
         widget = ComuneManagerWidget(mock_db_manager)
         
@@ -139,7 +139,7 @@ class TestComuneManagerWidget:
             widget._add_comune()
             
             # Verifica chiamata DB
-            mock_db_manager.aggiungi_comune.assert_called()
+            mock_db_manager.create_comune.assert_called()
 
 
 class TestPartiteRicercaWidget:

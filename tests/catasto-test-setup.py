@@ -298,7 +298,7 @@ def sample_data(clean_db):
     db = clean_db
     
     # Crea comune di esempio
-    comune_id = db.aggiungi_comune(
+    comune_id = db.create_comune(
         nome_comune="Carcare",
         provincia="Savona",
         regione="Liguria"

@@ -93,9 +93,9 @@ class TestCatastoDBManagerConnection:
 class TestComuneOperations:
     """Test operazioni CRUD per comuni"""
     
-    def test_aggiungi_comune_success(self, clean_db):
+    def test_create_comune_success(self, clean_db):
         """Test inserimento comune con successo"""
-        comune_id = clean_db.aggiungi_comune(
+        comune_id = clean_db.create_comune(
             nome_comune="Test Comune",
             provincia="Test Provincia",
             regione="Test Regione"
@@ -109,19 +109,19 @@ class TestComuneOperations:
         assert len(comuni) == 1
         assert comuni[0]['nome'] == "Test Comune"
     
-    def test_aggiungi_comune_duplicate(self, clean_db):
+    def test_create_comune_duplicate(self, clean_db):
         """Test inserimento comune duplicato"""
         # Primo inserimento
-        clean_db.aggiungi_comune("Duplicato", "Prov", "Reg")
+        clean_db.create_comune("Duplicato", "Prov", "Reg")
         
         # Tentativo di duplicazione
         with pytest.raises(DBUniqueConstraintError):
-            clean_db.aggiungi_comune("Duplicato", "Prov", "Reg")
+            clean_db.create_comune("Duplicato", "Prov", "Reg")
     
     def test_get_comune_by_name(self, clean_db):
         """Test recupero comune per nome"""
         # Inserisci comune
-        comune_id = clean_db.aggiungi_comune("Genova", "GE", "Liguria")
+        comune_id = clean_db.create_comune("Genova", "GE", "Liguria")
         
         # Recupera per nome
         result = clean_db.get_comune_id_by_name("Genova")
@@ -438,10 +438,10 @@ class TestTransactionManagement:
         
         try:
             # Inserisci comune
-            comune_id = clean_db.aggiungi_comune("Rollback Test", "RT", "Test")
+            comune_id = clean_db.create_comune("Rollback Test", "RT", "Test")
             
             # Forza un errore
-            clean_db.aggiungi_comune("Rollback Test", "RT", "Test")  # Duplicato
+            clean_db.create_comune("Rollback Test", "RT", "Test")  # Duplicato
             
             clean_db.commit()  # Non dovrebbe arrivare qui
         except DBUniqueConstraintError:
@@ -459,7 +459,7 @@ class TestTransactionManagement:
         
         try:
             # Crea nuovo comune
-            comune_id = db.aggiungi_comune("Transazione", "TR", "Test")
+            comune_id = db.create_comune("Transazione", "TR", "Test")
             
             # Crea possessore
             possessore_id = db.create_possessore(
@@ -528,7 +528,7 @@ class TestPerformanceAndOptimization:
         import time
         
         # Crea comune
-        comune_id = clean_db.aggiungi_comune("Performance", "PF", "Test")
+        comune_id = clean_db.create_comune("Performance", "PF", "Test")
         
         start_time = time.time()
         

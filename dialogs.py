@@ -3788,7 +3788,7 @@ class LocalitaSelectionDialog(QDialog):
                 return
 
             try:
-                localita_id_creata = self.db_manager.insert_localita(
+                localita_id_creata = self.db_manager.create_localita(
                     self.comune_id, nome, tipo, civico
                 )
 
@@ -3854,7 +3854,7 @@ class LocalitaSelectionDialog(QDialog):
             return
 
         try:
-            localita_id_creata = self.db_manager.insert_localita(
+            localita_id_creata = self.db_manager.create_localita(
                 self.comune_id, nome, tipo, civico
             )
 
@@ -5037,7 +5037,7 @@ class LocalitaSelectionDialog(QDialog):
                 return
 
             try:
-                localita_id_creata = self.db_manager.insert_localita(
+                localita_id_creata = self.db_manager.create_localita(
                     self.comune_id, nome, tipo, civico
                 )
 
@@ -5103,7 +5103,7 @@ class LocalitaSelectionDialog(QDialog):
             return
 
         try:
-            localita_id_creata = self.db_manager.insert_localita(
+            localita_id_creata = self.db_manager.create_localita(
                 self.comune_id, nome, tipo, civico
             )
 

@@ -1070,7 +1070,7 @@ class InserimentoComuneWidget(LazyLoadedWidget): # Eredita da LazyLoadedWidget
         username_per_log = self.utente_attuale_info.get('username', 'utente_sconosciuto') if self.utente_attuale_info else 'utente_sconosciuto'
         
         try:
-            comune_id = self.db_manager.aggiungi_comune(
+            comune_id = self.db_manager.create_comune(
                 nome_comune=nome_comune, provincia=provincia, regione=regione,
                 periodo_id=periodo_id_val, codice_catastale=codice_catastale,
                 data_istituzione=data_ist, data_soppressione=data_sopp, # Passa i valori corretti (o None)
@@ -1558,7 +1558,7 @@ class InserimentoLocalitaWidget(QWidget):
         form_group.setLayout(form_layout)
         layout.addWidget(form_group)
         insert_button = QPushButton("Inserisci Località")
-        insert_button.clicked.connect(self.insert_localita)
+        insert_button.clicked.connect(self.create_localita)
         layout.addWidget(insert_button)
         summary_group = QGroupBox("Località nel Comune Selezionato")
         summary_layout = QVBoxLayout(summary_group)
@@ -1601,7 +1601,7 @@ class InserimentoLocalitaWidget(QWidget):
             self._load_tipi_localita() # Carica i tipi dopo aver selezionato il comune
             self.refresh_localita()
 
-    def insert_localita(self):
+    def create_localita(self):
         if not self.comune_id:
             QMessageBox.warning(self, "Errore", "Seleziona un comune.")
             return
@@ -1619,7 +1619,7 @@ class InserimentoLocalitaWidget(QWidget):
 
         try:
             # Passa tipo_id invece della stringa
-            localita_id = self.db_manager.insert_localita(self.comune_id, nome, tipo_id, civico)
+            localita_id = self.db_manager.create_localita(self.comune_id, nome, tipo_id, civico)
             QMessageBox.information(self, "Successo", f"Località '{nome}' inserita con ID: {localita_id}")
             self.nome_edit.clear()
             self.civico_edit.setValue(0)

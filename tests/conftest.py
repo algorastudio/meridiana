@@ -44,7 +44,7 @@ def clean_db(db_manager):
 def sample_data(clean_db):
     """Fornisce un set di dati di base."""
     from datetime import date
-    comune_id = clean_db.aggiungi_comune("Genova Test", "GE", "Liguria")
+    comune_id = clean_db.create_comune("Genova Test", "GE", "Liguria")
     possessore1_id = clean_db.create_possessore(
         nome_completo="TEST MARIO", 
         comune_riferimento_id=comune_id, 
