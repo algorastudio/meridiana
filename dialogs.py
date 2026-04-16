@@ -1339,12 +1339,16 @@ class ModificaPartitaDialog(QDialog):
         self.btn_duplica_partita.clicked.connect(self._handle_duplica_partita)
         self.save_button.clicked.connect(self._save_changes)
         self.close_dialog_button.clicked.connect(self.accept)
+        self.btn_archivia_partita = QPushButton("Archivia Partita...")
+        self.btn_archivia_partita.setToolTip("Archivia logicamente questa partita (non cancella i dati).")
+        self.btn_archivia_partita.clicked.connect(self._archivia_partita)
         buttons_layout.addWidget(self.btn_duplica_partita)
+        buttons_layout.addWidget(self.btn_archivia_partita)
         buttons_layout.addStretch()
         buttons_layout.addWidget(self.save_button)
         buttons_layout.addWidget(self.close_dialog_button)
         main_layout.addLayout(buttons_layout)
-        
+
         self.setLayout(main_layout)
 
     # --- Metodi per il Caricamento dei Dati (Centralizzato) ---
@@ -1555,6 +1559,25 @@ class ModificaPartitaDialog(QDialog):
 
     # In gui_widgets.py, nella classe ModificaPartitaDialog
 # Sostituisci il metodo _load_documenti_allegati() con questa versione corretta:
+    def _archivia_partita(self):
+        risposta = QMessageBox.question(
+            self, "Conferma Archiviazione",
+            f"Archiviare la partita ID {self.partita_id}?\n\n"
+            "Il record rimarrà nel database ma non sarà visibile nelle ricerche standard.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if risposta != QMessageBox.Yes:
+            return
+        try:
+            self.db_manager.archivia_partita(self.partita_id)
+            QMessageBox.information(self, "Archiviazione Completata",
+                                    f"Partita ID {self.partita_id} archiviata con successo.")
+            self.accept()
+        except (DBNotFoundError, DBDataError, DBMError) as e:
+            QMessageBox.critical(self, "Errore", f"Impossibile archiviare la partita:\n{e}")
+        except Exception as e:
+            QMessageBox.critical(self, "Errore Imprevisto", str(e))
+
     def _handle_duplica_partita(self):
         """Gestisce il click sul pulsante 'Duplica', apre il dialogo delle opzioni e avvia l'operazione."""
         self.logger.info(f"Richiesta duplicazione per la partita ID {self.partita_id}.")
@@ -2463,13 +2486,36 @@ class ModificaPossessoreDialog(QDialog):
             QStyle.SP_DialogCancelButton), "Annulla")
         self.cancel_button.clicked.connect(self.reject)
 
+        self.btn_archivia_possessore = QPushButton("Archivia Possessore...")
+        self.btn_archivia_possessore.setToolTip("Archivia logicamente questo possessore (imposta attivo=FALSE, non cancella i dati).")
+        self.btn_archivia_possessore.clicked.connect(self._archivia_possessore)
+        buttons_layout.addWidget(self.btn_archivia_possessore)
         buttons_layout.addStretch()
         buttons_layout.addWidget(self.save_button)
         buttons_layout.addWidget(self.cancel_button)
         layout.addLayout(buttons_layout)
 
         self.setLayout(layout)
-        
+
+    def _archivia_possessore(self):
+        risposta = QMessageBox.question(
+            self, "Conferma Archiviazione",
+            f"Archiviare il possessore ID {self.possessore_id}?\n\n"
+            "Il record rimarrà nel database ma non sarà visibile nelle ricerche standard.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if risposta != QMessageBox.Yes:
+            return
+        try:
+            self.db_manager.archivia_possessore(self.possessore_id)
+            QMessageBox.information(self, "Archiviazione Completata",
+                                    f"Possessore ID {self.possessore_id} archiviato con successo.")
+            self.accept()
+        except (DBNotFoundError, DBDataError, DBMError) as e:
+            QMessageBox.critical(self, "Errore", f"Impossibile archiviare il possessore:\n{e}")
+        except Exception as e:
+            QMessageBox.critical(self, "Errore Imprevisto", str(e))
+
     # --- NUOVO METODO: per generare il nome completo ---
     def _genera_nome_completo(self):
         """
@@ -2660,12 +2706,40 @@ class ModificaComuneDialog(QDialog):
 
         main_layout.addLayout(form_layout)
 
-        self.button_box = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
-        self.button_box.accepted.connect(self._save_changes)
-        self.button_box.rejected.connect(self.reject)
-        main_layout.addWidget(self.button_box)
+        comune_buttons_layout = QHBoxLayout()
+        self.btn_archivia_comune = QPushButton("Archivia Comune...")
+        self.btn_archivia_comune.setToolTip("Archivia logicamente questo comune (non cancella i dati).")
+        self.btn_archivia_comune.clicked.connect(self._archivia_comune)
+        self.btn_salva_comune = QPushButton("Salva Modifiche")
+        self.btn_salva_comune.clicked.connect(self._save_changes)
+        self.btn_annulla_comune = QPushButton("Annulla")
+        self.btn_annulla_comune.clicked.connect(self.reject)
+        comune_buttons_layout.addWidget(self.btn_archivia_comune)
+        comune_buttons_layout.addStretch()
+        comune_buttons_layout.addWidget(self.btn_salva_comune)
+        comune_buttons_layout.addWidget(self.btn_annulla_comune)
+        main_layout.addLayout(comune_buttons_layout)
 
         self.setLayout(main_layout)
+
+    def _archivia_comune(self):
+        risposta = QMessageBox.question(
+            self, "Conferma Archiviazione",
+            f"Archiviare il comune ID {self.comune_id}?\n\n"
+            "Il record rimarrà nel database ma non sarà visibile nelle ricerche standard.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if risposta != QMessageBox.Yes:
+            return
+        try:
+            self.db_manager.archivia_comune(self.comune_id)
+            QMessageBox.information(self, "Archiviazione Completata",
+                                    f"Comune ID {self.comune_id} archiviato con successo.")
+            self.accept()
+        except (DBNotFoundError, DBDataError, DBMError) as e:
+            QMessageBox.critical(self, "Errore", f"Impossibile archiviare il comune:\n{e}")
+        except Exception as e:
+            QMessageBox.critical(self, "Errore Imprevisto", str(e))
 
     def _load_comune_data(self):
         # Per prima cosa, carichiamo tutti i periodi disponibili nel ComboBox
@@ -3173,11 +3247,39 @@ class ModificaLocalitaDialog(QDialog):
         self.civico_spinbox.setSpecialValueText("Nessuno")
         form_layout.addRow("Numero Civico (0 se assente):", self.civico_spinbox)
         layout.addLayout(form_layout)
-        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel, self)
-        buttons.accepted.connect(self._save_changes)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+        localita_buttons_layout = QHBoxLayout()
+        self.btn_archivia_localita = QPushButton("Archivia Località...")
+        self.btn_archivia_localita.setToolTip("Archivia logicamente questa località (non cancella i dati).")
+        self.btn_archivia_localita.clicked.connect(self._archivia_localita)
+        btn_salva_localita = QPushButton("Salva Modifiche")
+        btn_salva_localita.clicked.connect(self._save_changes)
+        btn_annulla_localita = QPushButton("Annulla")
+        btn_annulla_localita.clicked.connect(self.reject)
+        localita_buttons_layout.addWidget(self.btn_archivia_localita)
+        localita_buttons_layout.addStretch()
+        localita_buttons_layout.addWidget(btn_salva_localita)
+        localita_buttons_layout.addWidget(btn_annulla_localita)
+        layout.addLayout(localita_buttons_layout)
         self.setLayout(layout)
+
+    def _archivia_localita(self):
+        risposta = QMessageBox.question(
+            self, "Conferma Archiviazione",
+            f"Archiviare la località ID {self.localita_id}?\n\n"
+            "Il record rimarrà nel database ma non sarà visibile nelle ricerche standard.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if risposta != QMessageBox.Yes:
+            return
+        try:
+            self.db_manager.archivia_localita(self.localita_id)
+            QMessageBox.information(self, "Archiviazione Completata",
+                                    f"Località ID {self.localita_id} archiviata con successo.")
+            self.accept()
+        except (DBNotFoundError, DBDataError, DBMError) as e:
+            QMessageBox.critical(self, "Errore", f"Impossibile archiviare la località:\n{e}")
+        except Exception as e:
+            QMessageBox.critical(self, "Errore Imprevisto", str(e))
 
     def _load_tipi_localita(self):
         """Carica dinamicamente le tipologie di località nel ComboBox."""

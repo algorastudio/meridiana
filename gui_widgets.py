@@ -2191,60 +2191,7 @@ class RegistrazioneProprietaWidget(LazyLoadedWidget):
             self.logger.critical(f"Errore imprevisto registrazione proprietà: {e_gen}", exc_info=True)
             QMessageBox.critical(self, "Errore Imprevisto", f"Errore: {type(e_gen).__name__}: {e_gen}")
         self.logger.info("Registrazione proprietà completata.")
-    """ 
-    def add_possessore(self):
-        
-        if not self.comune_id:
-            QMessageBox.warning(self, "Comune Mancante", "Selezionare un comune per la partita prima di aggiungere un possessore.")
-            return
 
-        # --- MODIFICA CHIAVE QUI ---
-        # Passiamo 'None' come comune_id per indicare al dialogo di non filtrare
-        # e permettere la selezione/creazione da qualsiasi comune.
-        dialog_sel_poss = PossessoreSelectionDialog(self.db_manager, comune_id=None, parent=self)
-        # --- FINE MODIFICA ---
-
-        if dialog_sel_poss.exec() == QDialog.Accepted and dialog_sel_poss.selected_possessore:
-            selected_possessore_info = dialog_sel_poss.selected_possessore
-        
-        # 2. Dialogo per chiedere i dettagli del LEGAME (Titolo, Quota)
-        # Usiamo il metodo statico che abbiamo già preparato
-        dettagli_legame = DettagliLegamePossessoreDialog.get_details_for_new_legame(
-            nome_possessore=selected_possessore_info.get('nome_completo', 'N/D'),
-            tipo_partita_attuale='principale', # Per una nuova proprietà, è 'principale'
-            parent=self
-        )
-
-        if not dettagli_legame:
-            self.logger.info("Definizione dettagli del legame annullata.")
-            return
-
-        # 3. Combina le informazioni e aggiungile alla lista dati
-        dati_completi_possessore = {
-            "id": selected_possessore_info.get('id'),
-            "nome_completo": selected_possessore_info.get('nome_completo'),
-            "titolo": dettagli_legame.get('titolo'), # Obbligatorio
-            "quota": dettagli_legame.get('quota')   # Opzionale
-        }
-        
-        self.possessori_data.append(dati_completi_possessore)
-        self.update_possessori_table()
-
-    
-
-    
-
-    def add_immobile(self):
-       
-        dialog = ImmobileDialog(self.db_manager, self.comune_id, self)
-        result = dialog.exec_()
-
-        if result == QDialog.Accepted and dialog.immobile_data:
-            self.immobili_data.append(dialog.immobile_data)
-            self.update_immobili_table()
-
-
-    """
 
     def _pulisci_form_registrazione(self):
        

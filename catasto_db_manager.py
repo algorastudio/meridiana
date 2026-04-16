@@ -592,7 +592,7 @@ class CatastoDBManager:
                 note,
                 data_creazione, 
                 data_modifica
-            FROM catasto.comune ORDER BY nome;
+            FROM catasto.comune WHERE archiviato = FALSE ORDER BY nome;
         """
         # --- FINE QUERY AGGIORNATA ---
 
@@ -706,7 +706,7 @@ class CatastoDBManager:
         """
         Recupera un elenco di tutti i comuni (ID e nome) per popolare una scelta utente.
         """
-        query = f"SELECT id, nome FROM {self.schema}.comune ORDER BY nome"
+        query = f"SELECT id, nome FROM {self.schema}.comune WHERE archiviato = FALSE ORDER BY nome"
         try:
             with self._get_connection() as conn:
                 # Qui non usiamo DictCursor perché la firma del metodo prevede una lista di tuple
@@ -1093,7 +1093,7 @@ class CatastoDBManager:
             FROM {self.schema}.possessore p
             JOIN {self.schema}.comune c ON p.comune_id = c.id
             LEFT JOIN {self.schema}.partita_possessore pp ON p.id = pp.possessore_id
-            WHERE p.comune_id = %s
+            WHERE p.comune_id = %s AND p.attivo = TRUE
         """
 
         where_clauses = []
@@ -1206,9 +1206,8 @@ class CatastoDBManager:
                 loc.civico 
             FROM {self.schema}.localita loc
             LEFT JOIN {self.schema}.tipo_localita tl ON loc.tipo_id = tl.id
-            WHERE loc.comune_id = %s
+            WHERE loc.comune_id = %s AND loc.archiviato = FALSE
         """
-        # --- FINE CORREZIONE ---
 
         params: List[Union[int, str]] = [comune_id]
 
@@ -1240,17 +1239,14 @@ class CatastoDBManager:
         """
         
         params: List[Union[str, int]] = []
-        where_clauses = []
+        where_clauses = ["p.attivo = TRUE"]
 
         if search_term and search_term.strip():
             like_term = f"%{search_term.strip()}%"
             where_clauses.append("(p.nome_completo ILIKE %s OR p.cognome_nome ILIKE %s OR p.paternita ILIKE %s)")
             params.extend([like_term, like_term, like_term])
-        
-        query = query_base
-        if where_clauses:
-            query += " WHERE " + " AND ".join(where_clauses)
-        
+
+        query = query_base + " WHERE " + " AND ".join(where_clauses)
         query += " ORDER BY p.nome_completo LIMIT %s;"
         params.append(limit)
         
@@ -1625,7 +1621,67 @@ class CatastoDBManager:
         except Exception as e:
             self.logger.error(f"Errore imprevisto DB aggiornando possessore {possessore_id}: {e}", exc_info=True)
             raise DBMError(f"Impossibile aggiornare il possessore: {e}") from e
-        
+
+    # ------------------------------------------------------------------
+    # ARCHIVIAZIONE LOGICA (soft delete)
+    # ------------------------------------------------------------------
+
+    def archivia_comune(self, comune_id: int) -> None:
+        if not isinstance(comune_id, int) or comune_id <= 0:
+            raise DBDataError("ID comune non valido.")
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(f"CALL {self.schema}.archivia_comune(%s);", (comune_id,))
+            self.logger.info(f"Comune ID {comune_id} archiviato.")
+        except psycopg2.errors.RaiseException as e:
+            raise DBNotFoundError(str(e)) from e
+        except Exception as e:
+            self.logger.error(f"Errore archiviazione comune {comune_id}: {e}", exc_info=True)
+            raise DBMError(f"Impossibile archiviare il comune: {e}") from e
+
+    def archivia_partita(self, partita_id: int) -> None:
+        if not isinstance(partita_id, int) or partita_id <= 0:
+            raise DBDataError("ID partita non valido.")
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(f"CALL {self.schema}.archivia_partita(%s);", (partita_id,))
+            self.logger.info(f"Partita ID {partita_id} archiviata.")
+        except psycopg2.errors.RaiseException as e:
+            raise DBNotFoundError(str(e)) from e
+        except Exception as e:
+            self.logger.error(f"Errore archiviazione partita {partita_id}: {e}", exc_info=True)
+            raise DBMError(f"Impossibile archiviare la partita: {e}") from e
+
+    def archivia_possessore(self, possessore_id: int) -> None:
+        if not isinstance(possessore_id, int) or possessore_id <= 0:
+            raise DBDataError("ID possessore non valido.")
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(f"CALL {self.schema}.archivia_possessore(%s);", (possessore_id,))
+            self.logger.info(f"Possessore ID {possessore_id} archiviato.")
+        except psycopg2.errors.RaiseException as e:
+            raise DBNotFoundError(str(e)) from e
+        except Exception as e:
+            self.logger.error(f"Errore archiviazione possessore {possessore_id}: {e}", exc_info=True)
+            raise DBMError(f"Impossibile archiviare il possessore: {e}") from e
+
+    def archivia_localita(self, localita_id: int) -> None:
+        if not isinstance(localita_id, int) or localita_id <= 0:
+            raise DBDataError("ID località non valido.")
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(f"CALL {self.schema}.archivia_localita(%s);", (localita_id,))
+            self.logger.info(f"Località ID {localita_id} archiviata.")
+        except psycopg2.errors.RaiseException as e:
+            raise DBNotFoundError(str(e)) from e
+        except Exception as e:
+            self.logger.error(f"Errore archiviazione località {localita_id}: {e}", exc_info=True)
+            raise DBMError(f"Impossibile archiviare la località: {e}") from e
+
     def search_partite(self, comune_id: Optional[int] = None, numero_partita: Optional[int] = None,
                     possessore: Optional[str] = None, immobile_natura: Optional[str] = None,
                     suffisso_partita: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -1633,9 +1689,8 @@ class CatastoDBManager:
         Ricerca partite con filtri multipli, usando il nuovo pattern di connessione sicuro.
         """
         try:
-            # La logica di costruzione della query rimane invariata
-            conditions, params, joins = [], [], ""
-            select_cols = "p.id, c.nome as comune_nome, p.numero_partita, p.suffisso_partita, p.tipo, p.stato" 
+            conditions, params, joins = ["p.archiviato = FALSE"], [], ""
+            select_cols = "p.id, c.nome as comune_nome, p.numero_partita, p.suffisso_partita, p.tipo, p.stato"
             query_base = f"SELECT DISTINCT {select_cols} FROM {self.schema}.partita p JOIN {self.schema}.comune c ON p.comune_id = c.id"
 
             if possessore:
