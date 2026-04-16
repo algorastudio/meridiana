@@ -4262,25 +4262,3 @@ class CatastoDBManager:
         return env
 
     
-
-    
-        
-# --- Esempio di utilizzo minimale (invariato) ---
-if __name__ == "__main__":
-    print("Esecuzione test minimale CatastoDBManager...")
-    db = CatastoDBManager(password="Markus74") # Usa la tua password
-    if db.connect():
-        print("Connessione OK.")
-        comuni_carcare = db.get_comuni("Carcare")
-        carcare_id = None
-        if comuni_carcare:
-            carcare_id = comuni_carcare[0]['id']
-            print(f"Trovato comune 'Carcare' con ID: {carcare_id}")
-            possessori = db.get_possessori_by_comune(carcare_id)
-            if possessori: print(f"Trovati {len(possessori)} possessori per Carcare (ID: {carcare_id}):")
-            else: print(f"Nessun possessore trovato per Carcare (ID: {carcare_id}) o errore.")
-        else: print("Comune 'Carcare' non trovato.")
-        db.disconnect()
-        print("Disconnessione OK.")
-    else:
-        print("Connessione fallita.")

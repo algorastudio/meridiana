@@ -3483,7 +3483,6 @@ class LocalitaSelectionDialog(QDialog):
 
         self.load_localita()
         self._tab_changed(self.tabs.currentIndex()) # Imposta lo stato iniziale del pulsante
-     # --- INIZIO METODO MANCANTE/DA RIPRISTINARE ---
     def load_localita(self, filter_text: Optional[str] = None):
         """
         Carica le località per il comune_id corrente, applicando un filtro testuale opzionale.
@@ -3545,9 +3544,7 @@ class LocalitaSelectionDialog(QDialog):
 
         self.localita_table.setSortingEnabled(True)
         self._aggiorna_stato_pulsanti_action_localita() # Aggiorna stato pulsanti
-    # --- FINE METODO MANCANTE/DA RIPRISTINARE ---
 
-    # --- INIZIO METODO MANCANTE/DA RIPRISTINARE ---
     def _handle_double_click(self, item: QTableWidgetItem):
         """Gestisce il doppio click sulla tabella."""
         if self.selection_mode and self.tabs.currentIndex() == 0:
@@ -3557,7 +3554,6 @@ class LocalitaSelectionDialog(QDialog):
             # Se non in modalità selezione (ovvero gestione) e nel tab di visualizzazione,
             # il doppio click apre la modifica (se l'utente ha i permessi e una riga è selezionata).
             self.apri_modifica_localita_selezionata()
-    # --- FINE METODO MANCANTE/DA RIPRISTINARE ---
     def _aggiorna_stato_pulsanti_action_localita(self):
         """Abilita/disabilita i pulsanti di azione (Modifica, Seleziona) in base alla selezione nella tabella."""
         is_select_tab_active = (self.tabs.currentIndex() == 0)
@@ -3571,7 +3567,6 @@ class LocalitaSelectionDialog(QDialog):
         # Pulsante Seleziona (visibile e attivo solo se nel tab corretto e c'è selezione)
         # La visibilità del pulsante "Seleziona" è gestita in _tab_changed e _init_ui
         self.select_button.setEnabled(is_select_tab_active and has_selection_in_table)
-    # --- FINE METODO MANCANTE/DA RIPRISTINARE ---
 
 
     def _tab_changed(self, index):
@@ -3593,8 +3588,6 @@ class LocalitaSelectionDialog(QDialog):
             
         self._aggiorna_stato_pulsanti_action_localita() # Aggiorna abilitazione
 
-    # --- MODIFICA CRUCIALE: Unifica la gestione di selezione ed creazione ---
-    # --- INIZIO METODO MANCANTE/DA RIPRISTINARE ---
     def apri_modifica_localita_selezionata(self):
         """
         Apre un dialogo per modificare la località selezionata dalla tabella.
@@ -3630,7 +3623,6 @@ class LocalitaSelectionDialog(QDialog):
         if id_item and id_item.text().isdigit():
             return int(id_item.text())
         return None
-    # --- FINE METODO MANCANTE/DA RIPRISTINARE ---
     def _handle_selection_or_creation(self):
         """
         Gestisce la selezione di una località esistente o la creazione/selezione di una nuova.
@@ -3731,12 +3723,10 @@ class LocalitaSelectionDialog(QDialog):
              else:
                 QMessageBox.warning(self, "Azione Non Valida", "Azione non riconosciuta per il tab corrente.")
 
-    # Aggiungi questo metodo per pulire i campi del tab "Crea Nuova Località"
     def _pulisci_campi_creazione_localita(self):
         self.nome_edit_nuova.clear()
         self.tipo_combo_nuova.setCurrentIndex(0)
         self.civico_spinbox_nuova.setValue(self.civico_spinbox_nuova.minimum()) # Resetta al "Nessuno"
-    # --- INIZIO METODO MANCANTE/DA RIPRISTINARE ---
     def _salva_nuova_localita_da_tab(self):
         """
         Salva una nuova località dal tab "Crea Nuova Località".
@@ -3784,11 +3774,6 @@ class LocalitaSelectionDialog(QDialog):
             self.logger.critical(f"Errore imprevisto creazione località: {e}", exc_info=True)
             QMessageBox.critical(self, "Errore Imprevisto", f"Si è verificato un errore:\n{e}")
 
-    def _pulisci_campi_creazione_localita(self):
-        self.nome_edit_nuova.clear()
-        self.tipo_combo_nuova.setCurrentIndex(0)
-        self.civico_spinbox_nuova.setValue(self.civico_spinbox_nuova.minimum()) # Resetta al "Nessuno"
-    # --- FINE METODO MANCANTE/DA RIPRISTINARE ---
 class ModificaImmobileDialog(QDialog):
     """
     Dialogo per la modifica dei dettagli di un singolo immobile.
@@ -3865,7 +3850,7 @@ class ModificaImmobileDialog(QDialog):
             for loc_id, nome_localita in localita_list:
                 self.localita_combo.addItem(nome_localita, userData=loc_id)
         except Exception as e:
-            print(f"Errore nel caricamento delle località: {e}")
+            self.logger.error(f"Errore nel caricamento delle località: {e}", exc_info=True)
             self.localita_combo.addItem("Errore caricamento", -1)
 
     def _load_initial_data(self):
@@ -4750,7 +4735,6 @@ class LocalitaSelectionDialog(QDialog):
 
         self.load_localita()
         self._tab_changed(self.tabs.currentIndex()) # Imposta lo stato iniziale del pulsante
-     # --- INIZIO METODO MANCANTE/DA RIPRISTINARE ---
     def load_localita(self, filter_text: Optional[str] = None):
         """
         Carica le località per il comune_id corrente, applicando un filtro testuale opzionale.
@@ -4812,9 +4796,7 @@ class LocalitaSelectionDialog(QDialog):
 
         self.localita_table.setSortingEnabled(True)
         self._aggiorna_stato_pulsanti_action_localita() # Aggiorna stato pulsanti
-    # --- FINE METODO MANCANTE/DA RIPRISTINARE ---
 
-    # --- INIZIO METODO MANCANTE/DA RIPRISTINARE ---
     def _handle_double_click(self, item: QTableWidgetItem):
         """Gestisce il doppio click sulla tabella."""
         if self.selection_mode and self.tabs.currentIndex() == 0:
@@ -4824,7 +4806,6 @@ class LocalitaSelectionDialog(QDialog):
             # Se non in modalità selezione (ovvero gestione) e nel tab di visualizzazione,
             # il doppio click apre la modifica (se l'utente ha i permessi e una riga è selezionata).
             self.apri_modifica_localita_selezionata()
-    # --- FINE METODO MANCANTE/DA RIPRISTINARE ---
     def _aggiorna_stato_pulsanti_action_localita(self):
         """Abilita/disabilita i pulsanti di azione (Modifica, Seleziona) in base alla selezione nella tabella."""
         is_select_tab_active = (self.tabs.currentIndex() == 0)
@@ -4838,7 +4819,6 @@ class LocalitaSelectionDialog(QDialog):
         # Pulsante Seleziona (visibile e attivo solo se nel tab corretto e c'è selezione)
         # La visibilità del pulsante "Seleziona" è gestita in _tab_changed e _init_ui
         self.select_button.setEnabled(is_select_tab_active and has_selection_in_table)
-    # --- FINE METODO MANCANTE/DA RIPRISTINARE ---
 
 
     def _tab_changed(self, index):
@@ -4860,8 +4840,6 @@ class LocalitaSelectionDialog(QDialog):
             
         self._aggiorna_stato_pulsanti_action_localita() # Aggiorna abilitazione
 
-    # --- MODIFICA CRUCIALE: Unifica la gestione di selezione ed creazione ---
-    # --- INIZIO METODO MANCANTE/DA RIPRISTINARE ---
     def apri_modifica_localita_selezionata(self):
         """
         Apre un dialogo per modificare la località selezionata dalla tabella.
@@ -4894,7 +4872,6 @@ class LocalitaSelectionDialog(QDialog):
         if id_item and id_item.text().isdigit():
             return int(id_item.text())
         return None
-    # --- FINE METODO MANCANTE/DA RIPRISTINARE ---
     def _handle_selection_or_creation(self):
         """
         Gestisce la selezione di una località esistente o la creazione/selezione di una nuova.
@@ -4995,12 +4972,10 @@ class LocalitaSelectionDialog(QDialog):
              else:
                 QMessageBox.warning(self, "Azione Non Valida", "Azione non riconosciuta per il tab corrente.")
 
-    # Aggiungi questo metodo per pulire i campi del tab "Crea Nuova Località"
     def _pulisci_campi_creazione_localita(self):
         self.nome_edit_nuova.clear()
         self.tipo_combo_nuova.setCurrentIndex(0)
         self.civico_spinbox_nuova.setValue(self.civico_spinbox_nuova.minimum()) # Resetta al "Nessuno"
-    # --- INIZIO METODO MANCANTE/DA RIPRISTINARE ---
     def _salva_nuova_localita_da_tab(self):
         """
         Salva una nuova località dal tab "Crea Nuova Località".
@@ -5048,12 +5023,6 @@ class LocalitaSelectionDialog(QDialog):
             self.logger.critical(f"Errore imprevisto creazione località: {e}", exc_info=True)
             QMessageBox.critical(self, "Errore Imprevisto", f"Si è verificato un errore:\n{e}")
 
-    def _pulisci_campi_creazione_localita(self):
-        self.nome_edit_nuova.clear()
-        self.tipo_combo_nuova.setCurrentIndex(0)
-        self.civico_spinbox_nuova.setValue(self.civico_spinbox_nuova.minimum()) # Resetta al "Nessuno"
-    # --- FINE METODO MANCANTE/DA RIPRISTINARE ---
-        
 
 class DettagliLegamePossessoreDialog(QDialog):
     def __init__(self, nome_possessore_selezionato: str, partita_tipo: str,

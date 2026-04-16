@@ -570,7 +570,6 @@ class CatastoMainWindow(QMainWindow):
         dialog = EulaDialog(self)
         dialog.exec_()
 
-    # --- FINE AGGIUNTA METODO MANCANTE -
     def create_status_bar_content(self):
         status_frame = QFrame()
         status_frame.setFrameShape(QFrame.StyledPanel)
