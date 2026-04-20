@@ -1,6 +1,6 @@
 # Changelog — Meridiana
 
-## [1.2.1] — 2026-04-16
+## [1.2.1] — 2026-04-20
 
 Versione preparata per la consegna in comodato d'uso all'**Archivio di Stato di Savona**.
 
@@ -100,6 +100,43 @@ va ora incorporato direttamente nel nome della via (es. "Via Roma 11A").
 - Rimosso QSpinBox civico da `ModificaLocalitaDialog` e tutte le istanze di `LocalitaSelectionDialog`
 - Tabella località ridotta a 3 colonne: ID, Nome, Tipo (rimossa colonna Civico)
 - Rimossi tutti i riferimenti a `immobile.get('civico')` nella visualizzazione delle locality negli immobili
+
+### Bug fix bootstrap e dialog (Area 7)
+
+**Bootstrap DB** (`setup_server.py` / SQL):
+- `15_integration_audit_users.sql`: rimosso corpus di query di test bare che causavano
+  errore `cerca_possessori non esiste` su ogni `setup_server.py` su DB senza dati
+- `04_dati_stress_test.sql`: rimossa colonna `civico` dalle INSERT su `localita` (DROP precedente
+  in script 22 causava eccezione silenziosa e DB rimasto vuoto)
+- `17_funzione_ricerca_immobili.sql`: aggiunto `DROP FUNCTION IF EXISTS` prima di `CREATE OR REPLACE`
+  per consentire l'aggiornamento del RETURNS TABLE su DB già configurati
+
+**Dialog fix** (`dialogs.py`):
+- `ModificaImmobileDialog`: aggiunto `self.logger` mancante nel `__init__`; corretto
+  `get_localita_per_comune` → `get_localita_by_comune` e iterazione su `List[Dict]`
+- `LocalitaSelectionDialog._salva_nuova_localita_da_tab`: `currentText()` → `currentData()`
+  per passare l'ID intero invece della stringa al `create_localita`
+- `PossessoreSelectionDialog`: aggiunto pulsante **"Genera Nome Completo"** nel tab "Crea Nuovo"
+  (mancante rispetto a `ModificaPossessoreDialog`)
+
+### Titolo di possesso — da testo libero a selezione guidata (Area 8)
+
+**Fase A — QComboBox editabile:**
+- `DettagliLegamePossessoreDialog`: sostituito `QLineEdit` con `QComboBox` editabile
+  con lista predefinita (proprietà esclusiva, usufrutto, comproprietà, enfiteusi…)
+
+**Fase B — Tabella DB + menu di manutenzione:**
+- SQL (`23_titoli_possesso.sql`): tabella `titolo_possesso` con 9 valori default
+- `db_manager`: `get_titoli_possesso`, `gestisci_titolo_possesso`, `elimina_titolo_possesso`
+- `gui_widgets`: `GestioneTitoliPossessoWidget` — tabella con Aggiungi / Modifica / Elimina
+- `gui_main`: nuovo tab **"Titoli Possesso"** visibile solo agli admin
+- `DettagliLegamePossessoreDialog`: carica i titoli dalla tabella DB; fallback alla lista
+  statica se `db_manager` non disponibile
+
+### Miglioramenti UI (Area 9)
+
+- Tabella comuni (tab Principale): colonne Data Istituzione e Data Soppressione ridotte al
+  minimo (`ResizeToContents`); Nome Comune e Note si spartiscono lo spazio restante (`Stretch`)
 
 ---
 

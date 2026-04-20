@@ -6524,7 +6524,7 @@ class DashboardWidget(QWidget):
 
         # 1. Intestazione
         nome_utente = self.current_user_info.get('nome_completo', 'Utente') if self.current_user_info else 'Utente'
-        header_label = QLabel(f"<h2>Benvenuto in Meridiana 1.2, {nome_utente}</h2>")
+        header_label = QLabel(f"<h2>Benvenuto in Meridiana 1.2.1, {nome_utente}</h2>")
         header_label.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(header_label)
 
@@ -6653,7 +6653,7 @@ class WelcomeScreen(QDialog):
     def __init__(self, parent=None, logo_path: str = None, help_url: str = None):
         super().__init__(parent)
         self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
-        self.setWindowTitle("Benvenuto - Meridiana 1.2")
+        self.setWindowTitle("Benvenuto - Meridiana 1.2.1")
         self.setModal(True)
         self.setFixedSize(1024, 768)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
@@ -6687,7 +6687,7 @@ class WelcomeScreen(QDialog):
         main_layout.addLayout(logo_layout)
 
         # Titolo e Sottotitolo
-        title_label = QLabel("Meridiana 1.2"); title_label.setFont(QFont("Segoe UI", 28, QFont.Bold)); title_label.setAlignment(Qt.AlignCenter)
+        title_label = QLabel("Meridiana 1.2.1"); title_label.setFont(QFont("Segoe UI", 28, QFont.Bold)); title_label.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(title_label)
         
         subtitle_label = QLabel("Gestionale Catasto Storico - Archivio di Stato di Savona"); subtitle_label.setFont(QFont("Segoe UI", 14)); subtitle_label.setAlignment(Qt.AlignCenter)
