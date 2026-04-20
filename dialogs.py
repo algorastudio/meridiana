@@ -2329,21 +2329,35 @@ class DettagliLegamePossessoreDialog(QDialog):
 
         layout = QFormLayout(self)
 
-        self.titolo_edit = QLineEdit()
-        self.titolo_edit.setPlaceholderText(
-            "Es. proprietà esclusiva, usufrutto")
-        self.titolo_edit.setText(
-            titolo_attuale if titolo_attuale is not None else "proprietà esclusiva")  # Pre-compila
-        layout.addRow("Titolo di Possesso (*):", self.titolo_edit)
+        TITOLI_PREDEFINITI = [
+            "proprietà esclusiva",
+            "comproprietà",
+            "usufrutto",
+            "nuda proprietà",
+            "enfiteusi",
+            "superficie",
+            "uso",
+            "abitazione",
+            "servitù",
+        ]
+        self.titolo_combo = QComboBox()
+        self.titolo_combo.setEditable(True)
+        self.titolo_combo.addItems(TITOLI_PREDEFINITI)
+        valore_iniziale = titolo_attuale if titolo_attuale is not None else "proprietà esclusiva"
+        idx = self.titolo_combo.findText(valore_iniziale)
+        if idx >= 0:
+            self.titolo_combo.setCurrentIndex(idx)
+        else:
+            self.titolo_combo.setCurrentText(valore_iniziale)
+        layout.addRow("Titolo di Possesso (*):", self.titolo_combo)
 
         self.quota_edit = QLineEdit()
         self.quota_edit.setPlaceholderText(
             "Es. 1/1, 1/2 (lasciare vuoto se non applicabile)")
         self.quota_edit.setText(
-            quota_attuale if quota_attuale is not None else "")  # Pre-compila
+            quota_attuale if quota_attuale is not None else "")
         layout.addRow("Quota (opzionale):", self.quota_edit)
 
-        # ... (pulsanti OK/Annulla e metodo _accept_details come prima) ...
         buttons_layout = QHBoxLayout()
         self.ok_button = QPushButton(
             QApplication.style().standardIcon(QStyle.SP_DialogOkButton), "OK")
@@ -2356,15 +2370,14 @@ class DettagliLegamePossessoreDialog(QDialog):
         buttons_layout.addWidget(self.cancel_button)
         layout.addRow(buttons_layout)
         self.setLayout(layout)
-        self.titolo_edit.setFocus()
+        self.titolo_combo.setFocus()
 
     def _accept_details(self):
-        # ... (come prima) ...
-        titolo_val = self.titolo_edit.text().strip()
+        titolo_val = self.titolo_combo.currentText().strip()
         if not titolo_val:
             QMessageBox.warning(self, "Dato Mancante",
                                 "Il titolo di possesso è obbligatorio.")
-            self.titolo_edit.setFocus()
+            self.titolo_combo.setFocus()
             return
         self.titolo = titolo_val
         self.quota = self.quota_edit.text().strip() or None
@@ -5075,21 +5088,35 @@ class DettagliLegamePossessoreDialog(QDialog):
 
         layout = QFormLayout(self)
 
-        self.titolo_edit = QLineEdit()
-        self.titolo_edit.setPlaceholderText(
-            "Es. proprietà esclusiva, usufrutto")
-        self.titolo_edit.setText(
-            titolo_attuale if titolo_attuale is not None else "proprietà esclusiva")  # Pre-compila
-        layout.addRow("Titolo di Possesso (*):", self.titolo_edit)
+        TITOLI_PREDEFINITI = [
+            "proprietà esclusiva",
+            "comproprietà",
+            "usufrutto",
+            "nuda proprietà",
+            "enfiteusi",
+            "superficie",
+            "uso",
+            "abitazione",
+            "servitù",
+        ]
+        self.titolo_combo = QComboBox()
+        self.titolo_combo.setEditable(True)
+        self.titolo_combo.addItems(TITOLI_PREDEFINITI)
+        valore_iniziale = titolo_attuale if titolo_attuale is not None else "proprietà esclusiva"
+        idx = self.titolo_combo.findText(valore_iniziale)
+        if idx >= 0:
+            self.titolo_combo.setCurrentIndex(idx)
+        else:
+            self.titolo_combo.setCurrentText(valore_iniziale)
+        layout.addRow("Titolo di Possesso (*):", self.titolo_combo)
 
         self.quota_edit = QLineEdit()
         self.quota_edit.setPlaceholderText(
             "Es. 1/1, 1/2 (lasciare vuoto se non applicabile)")
         self.quota_edit.setText(
-            quota_attuale if quota_attuale is not None else "")  # Pre-compila
+            quota_attuale if quota_attuale is not None else "")
         layout.addRow("Quota (opzionale):", self.quota_edit)
 
-        # ... (pulsanti OK/Annulla e metodo _accept_details come prima) ...
         buttons_layout = QHBoxLayout()
         self.ok_button = QPushButton(
             QApplication.style().standardIcon(QStyle.SP_DialogOkButton), "OK")
@@ -5102,15 +5129,14 @@ class DettagliLegamePossessoreDialog(QDialog):
         buttons_layout.addWidget(self.cancel_button)
         layout.addRow(buttons_layout)
         self.setLayout(layout)
-        self.titolo_edit.setFocus()
+        self.titolo_combo.setFocus()
 
     def _accept_details(self):
-        # ... (come prima) ...
-        titolo_val = self.titolo_edit.text().strip()
+        titolo_val = self.titolo_combo.currentText().strip()
         if not titolo_val:
             QMessageBox.warning(self, "Dato Mancante",
                                 "Il titolo di possesso è obbligatorio.")
-            self.titolo_edit.setFocus()
+            self.titolo_combo.setFocus()
             return
         self.titolo = titolo_val
         self.quota = self.quota_edit.text().strip() or None
