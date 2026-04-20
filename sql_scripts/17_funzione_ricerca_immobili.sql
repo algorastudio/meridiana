@@ -5,6 +5,8 @@
 -- File: 17_funzione_ricerca_immobili.sql (Versione Estesa Proposta)
 SET search_path TO catasto, public;
 
+DROP FUNCTION IF EXISTS catasto.ricerca_avanzata_immobili(INTEGER, INTEGER, TEXT, TEXT, TEXT, INTEGER, INTEGER, INTEGER, INTEGER, TEXT, DATE, DATE);
+
 CREATE OR REPLACE FUNCTION catasto.ricerca_avanzata_immobili(
     p_comune_id INTEGER DEFAULT NULL,                   -- ID del comune (o NULL per tutti)
     p_localita_id INTEGER DEFAULT NULL,                 -- ID della località (o NULL per tutte nel comune o globalmente)
