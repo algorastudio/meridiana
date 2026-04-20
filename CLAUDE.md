@@ -134,18 +134,47 @@ Per migrazioni su DB esistenti, eseguire solo gli script nuovi.
 
 ## Test
 
+### Test suite completa (v1.2.1)
+
+**File principale**: `tests/test_db_manager.py` (855 linee, 100+ test methods)
+
+Copertura:
+- CRUD operations (Comune, Possessore, Partita, Localita, TipoLocalita)
+- Soft delete (archiviazione logica) con esclusione da ricerche
+- Validazione date (intervalli, inversioni)
+- Import CSV (gestione errori, duplicati)
+- Ricerca avanzata (fuzzy search, filtri)
+- Legami Partita-Possessore
+- Dashboard & statistiche
+- Exception handling
+
+**Fixture**: `tests/conftest.py`
+- `db_manager`: connessione pool PostgreSQL
+- `clean_db`: database pulito per ogni test
+- `sample_data`: dataset completo (comune, possessore, partita, localita)
+- `tipo_localita_id`: tipo di località per test
+- `temp_csv_possessori`: file CSV per import test
+
+### Esecuzione
+
 ```bash
-# Tutti i test (richiede DB di test attivo)
+# Tutti i test
 pytest tests/
 
 # Con output verboso
 pytest tests/ -v
 
-# Solo i test DB
-pytest tests/catasto-test-database.py -v
+# Solo test db_manager (new suite)
+pytest tests/test_db_manager.py -v
+
+# Test specifico
+pytest tests/test_db_manager.py::TestComuneCRUD::test_create_comune_successo -v
+
+# Con coverage
+pytest tests/test_db_manager.py --cov=catasto_db_manager --cov-report=html
 ```
 
-I test richiedono un database PostgreSQL raggiungibile con le credenziali in `conftest.py`.
+**Prerequisiti**: Database PostgreSQL raggiungibile con credenziali in `conftest.py` (vedi `test_db_setup` fixture).
 
 ---
 
@@ -166,6 +195,30 @@ pyinstaller meridiana.spec
 
 ---
 
+## Bug fix noti (v1.2.1)
+
+### Migrazione tipo_localita (Script 20)
+
+Script 20 ha migrato `localita.tipo` (text) → `localita.tipo_id` (FK a `tipo_localita`).
+
+**Bug fix applicati:**
+
+1. **`sql_scripts/17_funzione_ricerca_immobili.sql`**
+   - Era: `l.tipo AS localita_tipo` (colonna non esiste)
+   - Ora: `LEFT JOIN catasto.tipo_localita tl ON l.tipo_id = tl.id` → `tl.nome AS localita_tipo`
+
+2. **`catasto_db_manager.py:get_localita_details()`**
+   - Era: `SELECT loc.tipo`
+   - Ora: `LEFT JOIN catasto.tipo_localita tl ON loc.tipo_id = tl.id` → `tl.nome AS tipo`
+
+3. **`catasto_db_manager.py:get_immobile_details()`**
+   - Era: `l.tipo AS localita_tipo`
+   - Ora: `LEFT JOIN catasto.tipo_localita tl ON l.tipo_id = tl.id` → `tl.nome AS localita_tipo`
+
+**Test coverage**: `tests/test_db_manager.py::TestBugFixesTipoLocalita`
+
+---
+
 ## Note per lo sviluppo
 
 - Il file `version.txt` contiene i metadati versione per l'installer Windows — aggiornarlo ad ogni release
@@ -173,3 +226,4 @@ pyinstaller meridiana.spec
 - I log dell'app sono in `~/.meridiana/logs/meridiana_gui.log` (rotante 5 MB)
 - Non aggiungere `print()` nel codice di produzione — usare `self.logger`
 - Non lasciare credenziali hardcoded in nessun file (vedi storia: `.wolf69326vHRVvmRzsID.py`)
+- Prima di modificare query SQL che usano `localita`, controllare se usano `l.tipo` (rimosso) o `l.tipo_id` (corretto)

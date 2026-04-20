@@ -48,6 +48,36 @@ archiviazione logica per le quattro entità principali.
 - Controllo `data_chiusura >= data_impianto` in `create_partita` e `update_partita`
 - L'UI rimane responsabile solo della presentazione (campi vuoti, formato data)
 
+### Test suite completa e bug fix (Area 5)
+
+**Test Suite** (`tests/test_db_manager.py` — 855 linee, 100+ test methods):
+- 20+ classi test per massima copertura
+- CRUD operations: Comune, Possessore, Partita, Localita, TipoLocalita
+- Soft delete: validazione esclusione da ricerche per tutte le entità
+- Validazione: date invertite, campi obbligatori, ID invalidi
+- Import CSV: gestione duplicati, file mancanti, intestazioni errate
+- Ricerca avanzata: search_partite, ricerca_avanzata_immobili_gui, ricerca_avanzata_possessori
+- Legami Partita-Possessore: aggiungi, aggiorna, rimuovi
+- Dashboard: statistiche e views materializzate
+- Exception handling: DBDataError, DBUniqueConstraintError, DBNotFoundError, DBMError
+
+**Fixture migliorate** (`tests/conftest.py`):
+- `tipo_localita_id`: crea/recupera tipo di località
+- `sample_data`: dataset completo con comune, possessore, partita, localita
+- `temp_csv_possessori`: file CSV per test import
+
+**Bug fix — Migrazione tipo_localita (Script 20)**:
+- `sql_scripts/17_funzione_ricerca_immobili.sql`: 
+  - Sostituito `l.tipo` (colonna rimossa) con `LEFT JOIN catasto.tipo_localita tl ON l.tipo_id = tl.id`
+  - Aggiunto `tl.nome AS localita_tipo`
+  - Aggiunti filtri soft delete: `NOT c.archiviato`, `NOT p.archiviato`, `NOT l.archiviato`
+- `catasto_db_manager.py:get_localita_details()`:
+  - Sostituito `loc.tipo` con `LEFT JOIN catasto.tipo_localita tl ON loc.tipo_id = tl.id`
+  - Aggiunto `tl.nome AS tipo`
+- `catasto_db_manager.py:get_immobile_details()`:
+  - Sostituito `l.tipo` con `LEFT JOIN catasto.tipo_localita tl ON l.tipo_id = tl.id`
+  - Aggiunto `tl.nome AS localita_tipo`
+
 ---
 
 ## [1.2.0] — 2025-05-18
