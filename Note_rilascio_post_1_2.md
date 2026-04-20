@@ -6,4 +6,8 @@
   - [ ] psql -U postgres -d catasto_storico -f sql_scripts/17_funzione_ricerca_immobili.sql
 - [ ] Per l'attivazione della nuova opzione di soft delete eseguire la query
   - [ ] psql -U postgres -d catasto_storico -f sql_scripts/21_soft_delete.sql
+- [ ] Per l'accorpamento del civico in località
+  - [ ] psql -U postgres -d catasto_storico -f sql_scripts/22_drop_civico_localita.sql
+- [ ] Per l'attivazione del menu titolo di possesso 
+  - [ ] psql -U postgres -d catasto_storico -f sql_scripts/23_titoli_possesso.sql
   
