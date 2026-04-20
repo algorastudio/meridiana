@@ -1346,8 +1346,9 @@ class CatastoDBManager:
         if not isinstance(localita_id, int) or localita_id <= 0: return None
 
         query = f"""
-            SELECT loc.id, loc.nome, loc.tipo, loc.civico, loc.comune_id, com.nome AS comune_nome
+            SELECT loc.id, loc.nome, tl.nome AS tipo, loc.civico, loc.comune_id, com.nome AS comune_nome
             FROM {self.schema}.localita loc
+            LEFT JOIN {self.schema}.tipo_localita tl ON loc.tipo_id = tl.id
             JOIN {self.schema}.comune com ON loc.comune_id = com.id
             WHERE loc.id = %s;
         """
@@ -2249,11 +2250,12 @@ class CatastoDBManager:
                 i.numero_piani, i.numero_vani,
                 p.numero_partita, p.suffisso_partita,
                 c.nome AS comune_nome,
-                l.nome AS localita_nome, l.tipo AS localita_tipo, l.civico
+                l.nome AS localita_nome, tl.nome AS localita_tipo, l.civico
             FROM {self.schema}.immobile i
             JOIN {self.schema}.partita p ON i.partita_id = p.id
             JOIN {self.schema}.comune c ON p.comune_id = c.id
             JOIN {self.schema}.localita l ON i.localita_id = l.id
+            LEFT JOIN {self.schema}.tipo_localita tl ON l.tipo_id = tl.id
             WHERE i.id = %s;
         """
         try:

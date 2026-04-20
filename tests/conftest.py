@@ -1,6 +1,7 @@
 import pytest
 import os
 import sys
+from datetime import date
 
 # Aggiungi la directory principale al path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -22,13 +23,8 @@ def test_db_setup():
 def db_manager(test_db_setup):
     """Inizializza il CatastoDBManager con i parametri di test."""
     manager = CatastoDBManager(**test_db_setup)
-    
-    # QUI LA CORREZIONE: usiamo initialize_main_pool()
-    manager.initialize_main_pool() 
-    
+    manager.initialize_main_pool()
     yield manager
-    
-    # Chiude il pool alla fine dei test
     manager.close_pool()
 
 @pytest.fixture
@@ -36,38 +32,61 @@ def clean_db(db_manager):
     """Fornisce un database pulito prima di ogni singolo test."""
     with db_manager._get_connection() as conn:
         with conn.cursor() as cur:
-            # Svuota le tabelle principali a cascata
             cur.execute("TRUNCATE TABLE catasto.comune CASCADE;")
     return db_manager
 
 @pytest.fixture
-def sample_data(clean_db):
-    """Fornisce un set di dati di base."""
-    from datetime import date
+def tipo_localita_id(db_manager):
+    """Restituisce un ID tipo_localita esistente, creandone uno se necessario."""
+    tipi = db_manager.get_tipi_localita()
+    if tipi:
+        return tipi[0]['id']
+    # Se non esiste alcun tipo, creane uno
+    return db_manager.gestisci_tipo_localita(None, "Borgata Test")
+
+@pytest.fixture
+def sample_data(clean_db, tipo_localita_id):
+    """Fornisce un set completo di dati di base per i test."""
     comune_id = clean_db.create_comune("Genova Test", "GE", "Liguria")
     possessore1_id = clean_db.create_possessore(
-        nome_completo="TEST MARIO", 
-        comune_riferimento_id=comune_id, 
-        cognome_nome="TEST"
+        nome_completo="ROSSI MARIO fu Giovanni",
+        comune_riferimento_id=comune_id,
+        cognome_nome="ROSSI MARIO"
     )
     partita_id = clean_db.create_partita(
-        comune_id=comune_id, 
-        numero_partita=100, 
+        comune_id=comune_id,
+        numero_partita=100,
         tipo='principale',
         stato='attiva',
         data_impianto=date(1900, 1, 1)
+    )
+    localita_id = clean_db.create_localita(
+        comune_id=comune_id,
+        nome="Via Roma",
+        tipo_id=tipo_localita_id
     )
     return {
         'db': clean_db,
         'comune_id': comune_id,
         'possessore1_id': possessore1_id,
         'partita_id': partita_id,
-        'localita_id': None 
+        'localita_id': localita_id,
+        'tipo_localita_id': tipo_localita_id,
     }
 
 @pytest.fixture
+def temp_csv_possessori(tmp_path):
+    """File CSV con possessori per test import."""
+    file_path = tmp_path / "possessori.csv"
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write("nome_completo;cognome_nome\n")
+        f.write("VERDI GIUSEPPE fu Antonio;VERDI GIUSEPPE\n")
+        f.write("NERI LUCIA fu Marco;NERI LUCIA\n")
+    return str(file_path)
+
+@pytest.fixture
 def temp_csv_file(tmp_path):
-    """Crea un file CSV temporaneo per test."""
+    """File CSV per backward compatibility."""
     file_path = tmp_path / "test_import.csv"
     with open(file_path, "w", encoding="utf-8") as f:
         f.write("nome_completo;cognome_nome\n")
