@@ -3843,7 +3843,7 @@ class ModificaImmobileDialog(QDialog):
     """
     def __init__(self, db_manager, immobile_id: int, comune_id_partita: int, parent=None):
         super().__init__(parent)
-        
+        self.logger = logging.getLogger(__name__)
         # --- Parametri e stato interno ---
         self.db_manager = db_manager
         self.immobile_id = immobile_id
@@ -3909,9 +3909,9 @@ class ModificaImmobileDialog(QDialog):
 
         # Carica le località per il comune specifico
         try:
-            localita_list = self.db_manager.get_localita_per_comune(self.comune_id_partita)
-            for loc_id, nome_localita in localita_list:
-                self.localita_combo.addItem(nome_localita, userData=loc_id)
+            localita_list = self.db_manager.get_localita_by_comune(self.comune_id_partita)
+            for loc in localita_list:
+                self.localita_combo.addItem(loc['nome'], userData=loc['id'])
         except Exception as e:
             self.logger.error(f"Errore nel caricamento delle località: {e}", exc_info=True)
             self.localita_combo.addItem("Errore caricamento", -1)
