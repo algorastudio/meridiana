@@ -962,11 +962,19 @@ class CatastoDBManager:
             self.logger.error(f"Errore in check_possessore_exists: {e}", exc_info=True)
             return None
     def create_possessore(self, nome_completo: str, comune_riferimento_id: int, paternita: Optional[str] = None, attivo: bool = True, cognome_nome: Optional[str] = None) -> int:
+            if cognome_nome is None:
+                cognome_nome = nome_completo.strip()
             query = f"INSERT INTO {self.schema}.possessore (nome_completo, paternita, comune_id, attivo, cognome_nome) VALUES (%s, %s, %s, %s, %s) RETURNING id;"
             params = (nome_completo.strip(), paternita, comune_riferimento_id, attivo, cognome_nome)
             try:
                 with self._get_connection() as conn:
                     with conn.cursor() as cur:
+                        cur.execute(
+                            f"SELECT id FROM {self.schema}.possessore WHERE comune_id = %s AND nome_completo = %s",
+                            (comune_riferimento_id, nome_completo.strip())
+                        )
+                        if cur.fetchone():
+                            raise DBUniqueConstraintError(f"Un possessore con nome '{nome_completo.strip()}' esiste già in questo comune.")
                         cur.execute(query, params)
                         result = cur.fetchone()
                         if not result:
@@ -974,6 +982,8 @@ class CatastoDBManager:
                         return result[0]
             except psycopg2.errors.UniqueViolation as e:
                 raise DBUniqueConstraintError("Un possessore con questi dati esiste già.", details=str(e)) from e
+            except (DBUniqueConstraintError, DBDataError):
+                raise
             except Exception as e:
                 self.logger.error(f"Errore in create_possessore: {e}", exc_info=True)
                 raise DBMError(f"Errore database: {e}") from e
@@ -1003,6 +1013,14 @@ class CatastoDBManager:
         try:
             with self._get_connection() as conn:
                 with conn.cursor() as cur:
+                    # Pre-check esplicito: UNIQUE su (comune_id, numero_partita, suffisso_partita)
+                    # non cattura duplicati con suffisso=NULL (PostgreSQL tratta NULL come distinto)
+                    cur.execute(
+                        f"SELECT id FROM {self.schema}.partita WHERE comune_id = %s AND numero_partita = %s AND suffisso_partita IS NOT DISTINCT FROM %s",
+                        (comune_id, numero_partita, suffisso_partita)
+                    )
+                    if cur.fetchone():
+                        raise DBUniqueConstraintError(f"Esiste già una partita con numero {numero_partita} in questo comune.")
                     cur.execute(query, params)
                     result = cur.fetchone()
                     if result and result[0]:
@@ -1011,8 +1029,9 @@ class CatastoDBManager:
                     else:
                         raise DBMError("Creazione partita fallita, nessun ID restituito.")
         except psycopg2.errors.UniqueViolation as e:
-            # Rileva violazione del vincolo di unicità (comune_id, numero_partita, suffisso_partita)
             raise DBUniqueConstraintError(f"Esiste già una partita con questo numero e suffisso nel comune selezionato.") from e
+        except (DBUniqueConstraintError, DBDataError):
+            raise
         except Exception as e:
             self.logger.error(f"Errore DB durante la creazione della partita: {e}", exc_info=True)
             raise DBMError(f"Errore imprevisto durante la creazione della partita: {e}") from e
