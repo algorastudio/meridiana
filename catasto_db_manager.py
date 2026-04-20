@@ -969,6 +969,12 @@ class CatastoDBManager:
             try:
                 with self._get_connection() as conn:
                     with conn.cursor() as cur:
+                        cur.execute(
+                            f"SELECT id FROM {self.schema}.possessore WHERE comune_id = %s AND nome_completo = %s",
+                            (comune_riferimento_id, nome_completo.strip())
+                        )
+                        if cur.fetchone():
+                            raise DBUniqueConstraintError(f"Un possessore con nome '{nome_completo.strip()}' esiste già in questo comune.")
                         cur.execute(query, params)
                         result = cur.fetchone()
                         if not result:
@@ -976,6 +982,8 @@ class CatastoDBManager:
                         return result[0]
             except psycopg2.errors.UniqueViolation as e:
                 raise DBUniqueConstraintError("Un possessore con questi dati esiste già.", details=str(e)) from e
+            except (DBUniqueConstraintError, DBDataError):
+                raise
             except Exception as e:
                 self.logger.error(f"Errore in create_possessore: {e}", exc_info=True)
                 raise DBMError(f"Errore database: {e}") from e
