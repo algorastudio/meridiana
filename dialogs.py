@@ -4053,6 +4053,9 @@ class PossessoreSelectionDialog(QDialog):
         create_layout.addRow("Cognome e Nome (*):", self.cognome_edit)
         self.paternita_edit = QLineEdit()
         create_layout.addRow("Paternità:", self.paternita_edit)
+        self.btn_genera_nome = QPushButton("Genera Nome Completo")
+        self.btn_genera_nome.clicked.connect(self._genera_nome_completo)
+        create_layout.addRow("", self.btn_genera_nome)
         self.nome_completo_edit = QLineEdit()
         create_layout.addRow("Nome Completo (*):", self.nome_completo_edit)
 
@@ -4076,6 +4079,14 @@ class PossessoreSelectionDialog(QDialog):
         self.cancel_button.clicked.connect(self.reject)
         buttons_layout.addWidget(self.cancel_button)
         layout.addLayout(buttons_layout)
+
+    def _genera_nome_completo(self):
+        cognome_nome = self.cognome_edit.text().strip()
+        paternita = self.paternita_edit.text().strip()
+        if cognome_nome and paternita:
+            self.nome_completo_edit.setText(f"{cognome_nome} {paternita}")
+        elif cognome_nome:
+            self.nome_completo_edit.setText(cognome_nome)
 
     def load_data(self):
         """Carica i dati per entrambi i tab (lista possessori e lista comuni)."""
