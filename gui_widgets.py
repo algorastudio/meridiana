@@ -108,7 +108,14 @@ class ElencoComuniWidget(LazyLoadedWidget):
         self.comuni_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.comuni_table.setSelectionMode(QTableWidget.SingleSelection) # Importante per menu contestuale su una riga
         self.comuni_table.setAlternatingRowColors(True)
-        self.comuni_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        header = self.comuni_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)  # ID
+        header.setSectionResizeMode(1, QHeaderView.Stretch)            # Nome Comune
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Cod. Catastale
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Provincia
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # Data Istituzione
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # Data Soppressione
+        header.setSectionResizeMode(6, QHeaderView.Stretch)            # Note
         self.comuni_table.setSortingEnabled(True)
         # self.comuni_table.itemDoubleClicked.connect(self.mostra_partite_del_comune) # Il doppio click può rimanere
 
