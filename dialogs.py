@@ -991,8 +991,6 @@ class PartitaDetailsDialog(QDialog):
             for i, imm in enumerate(partita['immobili']):
                 report_lines.append(f"  - Immobile {i+1} (ID: {imm.get('id', 'N/D')}): {imm.get('natura', 'N/D')}")
                 localita_info = f"{imm.get('localita_nome', '')}"
-                if imm.get('civico') is not None and str(imm.get('civico')).strip() != '':
-                    localita_info += f", civ. {imm.get('civico')}"
                 if imm.get('localita_tipo'):
                     localita_info += f" ({imm.get('localita_tipo')})"
                 report_lines.append(f"    Località: {localita_info.strip() if localita_info.strip() else 'N/A'}")
@@ -1471,8 +1469,6 @@ class ModificaPartitaDialog(QDialog):
                     localita_text = ""
                     if 'localita_nome' in imm:
                         localita_text = imm['localita_nome']
-                        if 'civico' in imm and imm['civico'] is not None:
-                            localita_text += f", {imm['civico']}"
                         if 'localita_tipo' in imm:
                             localita_text += f" ({imm['localita_tipo']})"
                     self.immobili_table.setItem(row_idx, 4, QTableWidgetItem(localita_text))
@@ -3242,10 +3238,6 @@ class ModificaLocalitaDialog(QDialog):
         form_layout.addRow("Nome Località (*):", self.nome_edit)
         self.tipo_combo = QComboBox()
         form_layout.addRow("Tipo (*):", self.tipo_combo)
-        self.civico_spinbox = QSpinBox()
-        self.civico_spinbox.setMinimum(0); self.civico_spinbox.setMaximum(99999)
-        self.civico_spinbox.setSpecialValueText("Nessuno")
-        form_layout.addRow("Numero Civico (0 se assente):", self.civico_spinbox)
         layout.addLayout(form_layout)
         localita_buttons_layout = QHBoxLayout()
         self.btn_archivia_localita = QPushButton("Archivia Località...")
@@ -3310,8 +3302,6 @@ class ModificaLocalitaDialog(QDialog):
                 self.tipo_combo.setCurrentIndex(index)
         # --- FINE MODIFICA ---
 
-        civico_val = self.localita_data_originale.get('civico')
-        self.civico_spinbox.setValue(civico_val if civico_val is not None else 0)
 
     def _save_changes(self):
         # Recupera l'ID dal ComboBox invece del testo
@@ -3323,8 +3313,7 @@ class ModificaLocalitaDialog(QDialog):
 
         dati_modificati = {
             "nome": self.nome_edit.text().strip(),
-            "tipo_id": tipo_id_selezionato, # <-- MODIFICA QUI
-            "civico": self.civico_spinbox.value() if self.civico_spinbox.value() > 0 else None
+            "tipo_id": tipo_id_selezionato,
         }
         # ... (la logica di validazione e chiamata a update_localita rimane la stessa)
         if not dati_modificati["nome"]:
@@ -3548,17 +3537,12 @@ class LocalitaSelectionDialog(QDialog):
         if not self.selection_mode:
             create_tab = QWidget()
             create_form_layout = QFormLayout(create_tab)
-            self.nome_edit_nuova = QLineEdit() 
-            self.tipo_combo_nuova = QComboBox() 
+            self.nome_edit_nuova = QLineEdit()
+            self.tipo_combo_nuova = QComboBox()
             self.tipo_combo_nuova.addItems(["Regione", "Via", "Borgata", "Altro"])
-            self.civico_spinbox_nuova = QSpinBox() 
-            self.civico_spinbox_nuova.setMinimum(0)
-            self.civico_spinbox_nuova.setMaximum(99999)
-            self.civico_spinbox_nuova.setSpecialValueText("Nessuno") 
             create_form_layout.addRow(QLabel("Nome località (*):"), self.nome_edit_nuova)
             create_form_layout.addRow(QLabel("Tipo (*):"), self.tipo_combo_nuova)
-            create_form_layout.addRow(QLabel("Numero Civico (0 se assente):"), self.civico_spinbox_nuova)
-            self.btn_salva_nuova_localita = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton) ,"Salva Nuova Località")
+            self.btn_salva_nuova_localita = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton), "Salva Nuova Località")
             self.btn_salva_nuova_localita.clicked.connect(self._salva_nuova_localita_da_tab)
             create_form_layout.addRow(self.btn_salva_nuova_localita)
             self.tabs.addTab(create_tab, "Crea Nuova Località")
@@ -3612,10 +3596,6 @@ class LocalitaSelectionDialog(QDialog):
                             i, 1, QTableWidgetItem(loc.get('nome', '')))
                         self.localita_table.setItem(
                             i, 2, QTableWidgetItem(loc.get('tipo', '')))
-                        civico_text = str(loc.get('civico', '')) if loc.get(
-                            'civico') is not None else "-"
-                        self.localita_table.setItem(
-                            i, 3, QTableWidgetItem(civico_text))
                     self.localita_table.resizeColumnsToContents()
                 else:
                     self.logger.info(f"Nessuna località trovata per comune ID {self.comune_id} con filtro '{actual_filter_text}'.")
@@ -3748,11 +3728,8 @@ class LocalitaSelectionDialog(QDialog):
                 self.selected_localita_id = int(self.localita_table.item(current_row, 0).text())
                 nome = self.localita_table.item(current_row, 1).text()
                 tipo = self.localita_table.item(current_row, 2).text()
-                civico_item_text = self.localita_table.item(current_row, 3).text()
 
                 self.selected_localita_name = nome
-                if civico_item_text and civico_item_text != "-" and civico_item_text.strip() != self.civico_spinbox_nuova.specialValueText(): # Verifica anche il testo speciale
-                    self.selected_localita_name += f", civ. {civico_item_text}"
                 if tipo:
                     self.selected_localita_name += f" ({tipo})"
                 
@@ -3768,18 +3745,12 @@ class LocalitaSelectionDialog(QDialog):
         elif current_tab_index == 1 and not self.selection_mode: # Tab "Crea Nuova Località" (solo se in modalità gestione)
             nome = self.nome_edit_nuova.text().strip()
             tipo = self.tipo_combo_nuova.currentText()
-            civico_val = self.civico_spinbox_nuova.value()
-            
-            # Determina il valore finale del civico (NULL se 0 o testo speciale)
-            civico = None
-            if self.civico_spinbox_nuova.text().strip() != self.civico_spinbox_nuova.specialValueText() and civico_val != 0:
-                civico = civico_val
 
             if not nome:
                 QMessageBox.warning(self, "Dati Mancanti", "Il nome della località è obbligatorio.")
                 self.nome_edit_nuova.setFocus()
                 return
-            if not tipo or tipo.strip() == "Seleziona Tipo...": # Se avevi aggiunto un placeholder
+            if not tipo or tipo.strip() == "Seleziona Tipo...":
                 QMessageBox.warning(self, "Dati Mancanti", "Il tipo di località è obbligatorio.")
                 self.tipo_combo_nuova.setFocus()
                 return
@@ -3789,16 +3760,12 @@ class LocalitaSelectionDialog(QDialog):
 
             try:
                 localita_id_creata = self.db_manager.create_localita(
-                    self.comune_id, nome, tipo, civico
+                    self.comune_id, nome, tipo
                 )
 
                 if localita_id_creata is not None:
-                    # Imposta gli attributi selected_localita_id e selected_localita_name
-                    # che verranno letti dal chiamante (ImmobileDialog).
                     self.selected_localita_id = localita_id_creata
                     self.selected_localita_name = nome
-                    if civico is not None:
-                        self.selected_localita_name += f", civ. {civico}"
                     self.selected_localita_name += f" ({tipo})"
 
                     QMessageBox.information(self, "Località Creata", f"Località '{self.selected_localita_name}' registrata con ID: {self.selected_localita_id}.")
@@ -3828,24 +3795,18 @@ class LocalitaSelectionDialog(QDialog):
     def _pulisci_campi_creazione_localita(self):
         self.nome_edit_nuova.clear()
         self.tipo_combo_nuova.setCurrentIndex(0)
-        self.civico_spinbox_nuova.setValue(self.civico_spinbox_nuova.minimum()) # Resetta al "Nessuno"
     def _salva_nuova_localita_da_tab(self):
         """
         Salva una nuova località dal tab "Crea Nuova Località".
         """
         nome = self.nome_edit_nuova.text().strip()
         tipo = self.tipo_combo_nuova.currentText()
-        civico_val = self.civico_spinbox_nuova.value()
-
-        civico = None
-        if self.civico_spinbox_nuova.text().strip() != self.civico_spinbox_nuova.specialValueText() and civico_val != 0:
-            civico = civico_val
 
         if not nome:
             QMessageBox.warning(self, "Dati Mancanti", "Il nome della località è obbligatorio.")
             self.nome_edit_nuova.setFocus()
             return
-        if not tipo or tipo.strip() == "Seleziona Tipo...": # Se avevi aggiunto un placeholder
+        if not tipo or tipo.strip() == "Seleziona Tipo...":
             QMessageBox.warning(self, "Dati Mancanti", "Il tipo di località è obbligatorio.")
             self.tipo_combo_nuova.setFocus()
             return
@@ -3855,7 +3816,7 @@ class LocalitaSelectionDialog(QDialog):
 
         try:
             localita_id_creata = self.db_manager.create_localita(
-                self.comune_id, nome, tipo, civico
+                self.comune_id, nome, tipo
             )
 
             if localita_id_creata is not None:
@@ -4294,8 +4255,8 @@ class ImmobileDialog(QDialog):
         result = dialog.exec_()
 
         # Il LocalitaSelectionDialog, se modificato per get_selected_or_created_localita,
-        # dovrebbe restituire un dizionario con id e nome (compreso il civico).
-        # Ad esempio: { 'id': 1, 'nome': 'Via Roma, 12 (Via)' }
+        # dovrebbe restituire un dizionario con id e nome.
+        # Ad esempio: { 'id': 1, 'nome': 'Via Roma 11A (Via)' }
         if result == QDialog.Accepted:
             if dialog.selected_localita_id is not None and dialog.selected_localita_name is not None:
                 self.localita_id = dialog.selected_localita_id
@@ -4800,17 +4761,12 @@ class LocalitaSelectionDialog(QDialog):
         if not self.selection_mode:
             create_tab = QWidget()
             create_form_layout = QFormLayout(create_tab)
-            self.nome_edit_nuova = QLineEdit() 
-            self.tipo_combo_nuova = QComboBox() 
+            self.nome_edit_nuova = QLineEdit()
+            self.tipo_combo_nuova = QComboBox()
             self.tipo_combo_nuova.addItems(["Regione", "Via", "Borgata", "Altro"])
-            self.civico_spinbox_nuova = QSpinBox() 
-            self.civico_spinbox_nuova.setMinimum(0)
-            self.civico_spinbox_nuova.setMaximum(99999)
-            self.civico_spinbox_nuova.setSpecialValueText("Nessuno") 
             create_form_layout.addRow(QLabel("Nome località (*):"), self.nome_edit_nuova)
             create_form_layout.addRow(QLabel("Tipo (*):"), self.tipo_combo_nuova)
-            create_form_layout.addRow(QLabel("Numero Civico (0 se assente):"), self.civico_spinbox_nuova)
-            self.btn_salva_nuova_localita = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton) ,"Salva Nuova Località")
+            self.btn_salva_nuova_localita = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton), "Salva Nuova Località")
             self.btn_salva_nuova_localita.clicked.connect(self._salva_nuova_localita_da_tab)
             create_form_layout.addRow(self.btn_salva_nuova_localita)
             self.tabs.addTab(create_tab, "Crea Nuova Località")
@@ -4864,10 +4820,6 @@ class LocalitaSelectionDialog(QDialog):
                             i, 1, QTableWidgetItem(loc.get('nome', '')))
                         self.localita_table.setItem(
                             i, 2, QTableWidgetItem(loc.get('tipo', '')))
-                        civico_text = str(loc.get('civico', '')) if loc.get(
-                            'civico') is not None else "-"
-                        self.localita_table.setItem(
-                            i, 3, QTableWidgetItem(civico_text))
                     self.localita_table.resizeColumnsToContents()
                 else:
                     self.logger.info(f"Nessuna località trovata per comune ID {self.comune_id} con filtro '{actual_filter_text}'.")
@@ -4997,11 +4949,8 @@ class LocalitaSelectionDialog(QDialog):
                 self.selected_localita_id = int(self.localita_table.item(current_row, 0).text())
                 nome = self.localita_table.item(current_row, 1).text()
                 tipo = self.localita_table.item(current_row, 2).text()
-                civico_item_text = self.localita_table.item(current_row, 3).text()
 
                 self.selected_localita_name = nome
-                if civico_item_text and civico_item_text != "-" and civico_item_text.strip() != self.civico_spinbox_nuova.specialValueText(): # Verifica anche il testo speciale
-                    self.selected_localita_name += f", civ. {civico_item_text}"
                 if tipo:
                     self.selected_localita_name += f" ({tipo})"
                 
@@ -5017,18 +4966,12 @@ class LocalitaSelectionDialog(QDialog):
         elif current_tab_index == 1 and not self.selection_mode: # Tab "Crea Nuova Località" (solo se in modalità gestione)
             nome = self.nome_edit_nuova.text().strip()
             tipo = self.tipo_combo_nuova.currentText()
-            civico_val = self.civico_spinbox_nuova.value()
-            
-            # Determina il valore finale del civico (NULL se 0 o testo speciale)
-            civico = None
-            if self.civico_spinbox_nuova.text().strip() != self.civico_spinbox_nuova.specialValueText() and civico_val != 0:
-                civico = civico_val
 
             if not nome:
                 QMessageBox.warning(self, "Dati Mancanti", "Il nome della località è obbligatorio.")
                 self.nome_edit_nuova.setFocus()
                 return
-            if not tipo or tipo.strip() == "Seleziona Tipo...": # Se avevi aggiunto un placeholder
+            if not tipo or tipo.strip() == "Seleziona Tipo...":
                 QMessageBox.warning(self, "Dati Mancanti", "Il tipo di località è obbligatorio.")
                 self.tipo_combo_nuova.setFocus()
                 return
@@ -5038,16 +4981,12 @@ class LocalitaSelectionDialog(QDialog):
 
             try:
                 localita_id_creata = self.db_manager.create_localita(
-                    self.comune_id, nome, tipo, civico
+                    self.comune_id, nome, tipo
                 )
 
                 if localita_id_creata is not None:
-                    # Imposta gli attributi selected_localita_id e selected_localita_name
-                    # che verranno letti dal chiamante (ImmobileDialog).
                     self.selected_localita_id = localita_id_creata
                     self.selected_localita_name = nome
-                    if civico is not None:
-                        self.selected_localita_name += f", civ. {civico}"
                     self.selected_localita_name += f" ({tipo})"
 
                     QMessageBox.information(self, "Località Creata", f"Località '{self.selected_localita_name}' registrata con ID: {self.selected_localita_id}.")
@@ -5077,24 +5016,18 @@ class LocalitaSelectionDialog(QDialog):
     def _pulisci_campi_creazione_localita(self):
         self.nome_edit_nuova.clear()
         self.tipo_combo_nuova.setCurrentIndex(0)
-        self.civico_spinbox_nuova.setValue(self.civico_spinbox_nuova.minimum()) # Resetta al "Nessuno"
     def _salva_nuova_localita_da_tab(self):
         """
         Salva una nuova località dal tab "Crea Nuova Località".
         """
         nome = self.nome_edit_nuova.text().strip()
         tipo = self.tipo_combo_nuova.currentText()
-        civico_val = self.civico_spinbox_nuova.value()
-
-        civico = None
-        if self.civico_spinbox_nuova.text().strip() != self.civico_spinbox_nuova.specialValueText() and civico_val != 0:
-            civico = civico_val
 
         if not nome:
             QMessageBox.warning(self, "Dati Mancanti", "Il nome della località è obbligatorio.")
             self.nome_edit_nuova.setFocus()
             return
-        if not tipo or tipo.strip() == "Seleziona Tipo...": # Se avevi aggiunto un placeholder
+        if not tipo or tipo.strip() == "Seleziona Tipo...":
             QMessageBox.warning(self, "Dati Mancanti", "Il tipo di località è obbligatorio.")
             self.tipo_combo_nuova.setFocus()
             return
@@ -5104,7 +5037,7 @@ class LocalitaSelectionDialog(QDialog):
 
         try:
             localita_id_creata = self.db_manager.create_localita(
-                self.comune_id, nome, tipo, civico
+                self.comune_id, nome, tipo
             )
 
             if localita_id_creata is not None:

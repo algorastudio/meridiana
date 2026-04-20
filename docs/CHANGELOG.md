@@ -78,6 +78,29 @@ archiviazione logica per le quattro entità principali.
   - Sostituito `l.tipo` con `LEFT JOIN catasto.tipo_localita tl ON l.tipo_id = tl.id`
   - Aggiunto `tl.nome AS localita_tipo`
 
+### Rimozione campo civico da localita (Area 6)
+
+Il campo `civico INTEGER` nella tabella `localita` è stato rimosso in quanto non utilizzato in
+ricerche o statistiche e incompatibile con valori alfanumerici (es. "11A"). Il numero civico
+va ora incorporato direttamente nel nome della via (es. "Via Roma 11A").
+
+**Database** (`sql_scripts/22_drop_civico_localita.sql` — da eseguire su DB esistenti):
+- Pre-migrazione: i valori numerici di `civico` vengono concatenati a `nome` prima della DROP
+- Vincolo UNIQUE aggiornato: `(comune_id, nome, civico)` → `(comune_id, nome)`
+- `ALTER TABLE catasto.localita DROP COLUMN civico`
+
+**db_manager** (`catasto_db_manager.py`):
+- `create_localita`: rimosso parametro `civico`, firma ora `(comune_id, nome, tipo_id)`
+- Rimosso `civico` da tutte le query SELECT: `get_immobili_by_comune`, `get_elenco_immobili_per_esportazione`,
+  `get_elenco_localita_per_esportazione`, `get_localita_by_comune`, `get_localita_details`,
+  `get_partita_details`, `get_immobile_details`, `search_all_entities_fuzzy`
+- Rimosso blocco `if "civico" in dati_modificati` da `update_localita`
+
+**UI** (`dialogs.py`, `gui_widgets.py`, `custom_widgets.py`, `app_utils.py`):
+- Rimosso QSpinBox civico da `ModificaLocalitaDialog` e tutte le istanze di `LocalitaSelectionDialog`
+- Tabella località ridotta a 3 colonne: ID, Nome, Tipo (rimossa colonna Civico)
+- Rimossi tutti i riferimenti a `immobile.get('civico')` nella visualizzazione delle locality negli immobili
+
 ---
 
 ## [1.2.0] — 2025-05-18

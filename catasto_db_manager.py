@@ -689,10 +689,9 @@ class CatastoDBManager:
             SELECT 
                 i.id, 
                 i.natura, 
-                l.nome AS localita_nome, 
-                l.civico, 
+                l.nome AS localita_nome,
                 tl.nome as tipo_localita,
-                l.id as localita_id -- Aggiungi questa colonna fondamentale
+                l.id as localita_id
             FROM {self.schema}.immobile i
             JOIN {self.schema}.partita p ON i.partita_id = p.id
             JOIN {self.schema}.localita l ON i.localita_id = l.id
@@ -1157,8 +1156,8 @@ class CatastoDBManager:
         query = f"""
             SELECT 
                 i.id AS id_immobile, i.natura, i.classificazione, i.consistenza,
-                i.numero_piani, i.numero_vani, l.nome AS localita_nome, 
-                tl.nome AS localita_tipo, l.civico, p.numero_partita, 
+                i.numero_piani, i.numero_vani, l.nome AS localita_nome,
+                tl.nome AS localita_tipo, p.numero_partita,
                 p.suffisso_partita, c.nome AS comune_nome
             FROM {self.schema}.immobile i
             JOIN {self.schema}.partita p ON i.partita_id = p.id
@@ -1182,7 +1181,7 @@ class CatastoDBManager:
     def get_elenco_localita_per_esportazione(self, comune_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """Recupera un elenco completo di località per l'esportazione."""
         query = f"""
-            SELECT l.id, l.nome, tl.nome AS tipo, l.civico, c.nome AS comune_nome
+            SELECT l.id, l.nome, tl.nome AS tipo, c.nome AS comune_nome
             FROM {self.schema}.localita l
             JOIN {self.schema}.comune c ON l.comune_id = c.id
             LEFT JOIN {self.schema}.tipo_localita tl ON l.tipo_id = tl.id
@@ -1209,9 +1208,8 @@ class CatastoDBManager:
         query_base = f"""
             SELECT 
                 loc.id, 
-                loc.nome, 
-                tl.nome AS tipo,  -- Selezioniamo il nome dalla tabella tipo_localita
-                loc.civico 
+                loc.nome,
+                tl.nome AS tipo
             FROM {self.schema}.localita loc
             LEFT JOIN {self.schema}.tipo_localita tl ON loc.tipo_id = tl.id
             WHERE loc.comune_id = %s AND loc.archiviato = FALSE
@@ -1223,7 +1221,7 @@ class CatastoDBManager:
             query_base += " AND loc.nome ILIKE %s"
             params.append(f"%{filter_text}%")
 
-        query = query_base + " ORDER BY tl.nome, loc.nome, loc.civico;"
+        query = query_base + " ORDER BY tl.nome, loc.nome;"
 
         try:
             with self._get_connection() as conn:
@@ -1305,31 +1303,28 @@ class CatastoDBManager:
             self.logger.error(f"Errore DB durante il recupero dei possessori per la partita ID {partita_id}: {e}", exc_info=True)
             # In caso di errore, restituisce una lista vuota per stabilità
             return []
-    def create_localita(self, comune_id: int, nome: str, tipo_id: int, civico: Optional[int] = None) -> int:
+    def create_localita(self, comune_id: int, nome: str, tipo_id: int) -> int:
         """
         Inserisce una nuova località usando tipo_id (FK) e gestisce i conflitti.
+        Il civico, se presente, va già incluso nel nome (es. "Via Roma 11A").
         """
         if not all([isinstance(comune_id, int), comune_id > 0, isinstance(nome, str), nome.strip(), isinstance(tipo_id, int), tipo_id > 0]):
             raise DBDataError("Parametri per l'inserimento della località non validi.")
 
-        actual_civico = civico if civico is not None and civico > 0 else None
-
-        # La colonna ora è 'tipo_id'
-        query_insert = f"INSERT INTO {self.schema}.localita (comune_id, nome, tipo_id, civico) VALUES (%s, %s, %s, %s) ON CONFLICT (comune_id, nome, civico) DO NOTHING RETURNING id;"
-        # Anche la query di select deve usare tipo_id, ma per ora non è strettamente necessaria se il recupero avviene dopo
-        query_select = f"SELECT id FROM {self.schema}.localita WHERE comune_id = %s AND nome = %s AND tipo_id = %s AND ((civico IS NULL AND %s IS NULL) OR (civico = %s));"
+        query_insert = f"INSERT INTO {self.schema}.localita (comune_id, nome, tipo_id) VALUES (%s, %s, %s) ON CONFLICT (comune_id, nome) DO NOTHING RETURNING id;"
+        query_select = f"SELECT id FROM {self.schema}.localita WHERE comune_id = %s AND nome = %s;"
 
         try:
             with self._get_connection() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-                    cur.execute(query_insert, (comune_id, nome.strip(), tipo_id, actual_civico))
+                    cur.execute(query_insert, (comune_id, nome.strip(), tipo_id))
                     insert_result = cur.fetchone()
 
                     if insert_result and insert_result['id']:
                         localita_id = insert_result['id']
                         self.logger.info(f"Località '{nome}' inserita con successo. ID: {localita_id}.")
-                    else: # Conflitto, recupera l'ID esistente
-                        cur.execute(query_select, (comune_id, nome.strip(), tipo_id, actual_civico, actual_civico))
+                    else:
+                        cur.execute(query_select, (comune_id, nome.strip()))
                         select_result = cur.fetchone()
                         if select_result and select_result['id']:
                             localita_id = select_result['id']
@@ -1346,7 +1341,7 @@ class CatastoDBManager:
         if not isinstance(localita_id, int) or localita_id <= 0: return None
 
         query = f"""
-            SELECT loc.id, loc.nome, tl.nome AS tipo, loc.civico, loc.comune_id, com.nome AS comune_nome
+            SELECT loc.id, loc.nome, tl.nome AS tipo, loc.comune_id, com.nome AS comune_nome
             FROM {self.schema}.localita loc
             LEFT JOIN {self.schema}.tipo_localita tl ON loc.tipo_id = tl.id
             JOIN {self.schema}.comune com ON loc.comune_id = com.id
@@ -1378,10 +1373,6 @@ class CatastoDBManager:
             set_clauses.append("tipo_id = %s")
             params.append(dati_modificati["tipo_id"])
         # --- FINE MODIFICA ---
-
-        if "civico" in dati_modificati:
-            set_clauses.append("civico = %s")
-            params.append(dati_modificati["civico"] if dati_modificati["civico"] else None)
 
         if not set_clauses:
             self.logger.info(f"Nessun campo valido fornito per aggiornare località ID {localita_id}.")
@@ -1464,12 +1455,12 @@ class CatastoDBManager:
                     # --- INIZIO CORREZIONE QUI ---
                     # 3. Immobili (query aggiornata con JOIN a tipo_localita)
                     query_imm = f"""
-                        SELECT i.id, i.natura, i.numero_piani, i.numero_vani, i.consistenza, 
-                            i.classificazione, l.nome as localita_nome, tl.nome as localita_tipo, l.civico 
-                        FROM {self.schema}.immobile i 
+                        SELECT i.id, i.natura, i.numero_piani, i.numero_vani, i.consistenza,
+                            i.classificazione, l.nome as localita_nome, tl.nome as localita_tipo
+                        FROM {self.schema}.immobile i
                         JOIN {self.schema}.localita l ON i.localita_id = l.id
                         LEFT JOIN {self.schema}.tipo_localita tl ON l.tipo_id = tl.id
-                        WHERE i.partita_id = %s 
+                        WHERE i.partita_id = %s
                         ORDER BY l.nome, i.natura;
                     """
                     # --- FINE CORREZIONE QUI ---
@@ -2250,7 +2241,7 @@ class CatastoDBManager:
                 i.numero_piani, i.numero_vani,
                 p.numero_partita, p.suffisso_partita,
                 c.nome AS comune_nome,
-                l.nome AS localita_nome, tl.nome AS localita_tipo, l.civico
+                l.nome AS localita_nome, tl.nome AS localita_tipo
             FROM {self.schema}.immobile i
             JOIN {self.schema}.partita p ON i.partita_id = p.id
             JOIN {self.schema}.comune c ON p.comune_id = c.id
@@ -3897,12 +3888,11 @@ class CatastoDBManager:
             SELECT
                 l.id AS entity_id,
                 l.nome AS display_text,
-                'Tipo: ' || COALESCE(tl.nome, 'N/D') || ', Civico: ' || COALESCE(CAST(l.civico AS TEXT), 'N/A') || ' | Comune: ' || c.nome AS detail_text,
+                'Tipo: ' || COALESCE(tl.nome, 'N/D') || ' | Comune: ' || c.nome AS detail_text,
                 similarity(l.nome, %s) AS similarity_score,
                 'nome' AS search_field,
                 l.nome,
-                tl.nome AS tipo, -- Selezioniamo il nome dalla tabella joinata
-                l.civico,
+                tl.nome AS tipo,
                 c.nome as comune_nome,
                 COALESCE(im.num_immobili, 0) as num_immobili
             FROM {self.schema}.localita l

@@ -920,8 +920,6 @@ class RicercaAvanzataImmobiliWidget(QWidget):
                         row_idx, col, QTableWidgetItem(immobile.get('comune_nome', '')))
                     col += 1
                     localita_display = f"{immobile.get('localita_nome', '')}"
-                    if immobile.get('civico'):
-                        localita_display += f", {immobile.get('civico')}"
                     if immobile.get('localita_tipo'):
                         localita_display += f" ({immobile.get('localita_tipo')})"
                     self.risultati_immobili_table.setItem(
@@ -1548,13 +1546,6 @@ class InserimentoLocalitaWidget(QWidget):
         self.tipo_combo.setEnabled(False)
         form_layout.addWidget(tipo_label, 2, 0)
         form_layout.addWidget(self.tipo_combo, 2, 1)
-        civico_label = QLabel("Civico (opzionale):")
-        self.civico_edit = QSpinBox()
-        self.civico_edit.setMinimum(0)
-        self.civico_edit.setMaximum(9999)
-        self.civico_edit.setSpecialValueText("Nessuno")
-        form_layout.addWidget(civico_label, 3, 0)
-        form_layout.addWidget(self.civico_edit, 3, 1)
         form_group.setLayout(form_layout)
         layout.addWidget(form_group)
         insert_button = QPushButton("Inserisci Località")
@@ -1565,8 +1556,8 @@ class InserimentoLocalitaWidget(QWidget):
         self.refresh_button = QPushButton("Aggiorna Lista")
         self.refresh_button.clicked.connect(self.refresh_localita)
         self.localita_table = QTableWidget()
-        self.localita_table.setColumnCount(4)
-        self.localita_table.setHorizontalHeaderLabels(["ID", "Nome", "Tipo", "Civico"])
+        self.localita_table.setColumnCount(3)
+        self.localita_table.setHorizontalHeaderLabels(["ID", "Nome", "Tipo"])
         self.localita_table.setAlternatingRowColors(True)
         self.localita_table.horizontalHeader().setStretchLastSection(True)
         summary_layout.addWidget(self.refresh_button)
@@ -1607,22 +1598,19 @@ class InserimentoLocalitaWidget(QWidget):
             return
 
         nome = self.nome_edit.text().strip()
-        tipo_id = self.tipo_combo.currentData() # <-- MODIFICA QUI: Prende l'ID
-        civico = self.civico_edit.value() if self.civico_edit.value() > 0 else None
+        tipo_id = self.tipo_combo.currentData()
 
         if not nome:
             QMessageBox.warning(self, "Errore", "Il nome della località è obbligatorio.")
             return
-        if tipo_id is None: # <-- MODIFICA QUI: Controlla che un tipo sia selezionato
+        if tipo_id is None:
             QMessageBox.warning(self, "Errore", "Selezionare una tipologia valida.")
             return
 
         try:
-            # Passa tipo_id invece della stringa
-            localita_id = self.db_manager.create_localita(self.comune_id, nome, tipo_id, civico)
+            localita_id = self.db_manager.create_localita(self.comune_id, nome, tipo_id)
             QMessageBox.information(self, "Successo", f"Località '{nome}' inserita con ID: {localita_id}")
             self.nome_edit.clear()
-            self.civico_edit.setValue(0)
             self.refresh_localita()
         except (DBMError, DBDataError, DBUniqueConstraintError) as e:
             QMessageBox.critical(self, "Errore Inserimento", str(e))
@@ -2930,12 +2918,9 @@ class OperazioniPartitaWidget(QWidget):
 
                 loc_nome = immobile.get('localita_nome', '')
                 loc_tipo = immobile.get('localita_tipo', '')
-                loc_civico = immobile.get('civico', '')
                 loc_text = loc_nome
                 if loc_tipo:
                     loc_text += f" ({loc_tipo})"
-                if loc_civico:  # Civico potrebbe essere 0 o stringa vuota se non presente
-                    loc_text += f", civ. {loc_civico}"
                 table.setItem(row, col, QTableWidgetItem(loc_text.strip()))
                 col += 1
 
@@ -3028,8 +3013,7 @@ class OperazioniPartitaWidget(QWidget):
                 nat_i = QTableWidgetItem(immobile.get('natura', 'N/D'))
                 nat_i.setFlags(nat_i.flags() & ~Qt.ItemIsEditable)
                 table.setItem(row, 2, nat_i)
-                loc_t = f"{immobile.get('localita_nome', '')} {immobile.get('civico', '')}".strip(
-                )
+                loc_t = immobile.get('localita_nome', '')
                 loc_i = QTableWidgetItem(loc_t)
                 loc_i.setFlags(loc_i.flags() & ~Qt.ItemIsEditable)
                 table.setItem(row, 3, loc_i)
@@ -3367,7 +3351,7 @@ class EsportazioniWidget(LazyLoadedWidget):
             "localita_nome": "Località", "numero_partita": "Numero Partita", "comune_nome": "Comune"
         },
         "Elenco Località": {
-            "id": "ID Località", "nome": "Nome", "tipo": "Tipo", "civico": "Civico", "comune_nome": "Comune"
+            "id": "ID Località", "nome": "Nome", "tipo": "Tipo", "comune_nome": "Comune"
         },
         "Elenco Variazioni": {
             "variazione_id": "ID Variazione", "tipo_variazione": "Tipo Variazione", "data_variazione": "Data",
@@ -5968,8 +5952,7 @@ class UnifiedFuzzySearchWidget(QWidget):
         self._populate_table(self.localita_table, results_by_type.get('localita', []),
             lambda l: [
                 l.get('nome', ''),
-                l.get('tipo', '') or '',      # Aggiunto
-                l.get('civico', '') or '',    # Aggiunto
+                l.get('tipo', '') or '',
                 l.get('comune_nome', ''),
                 l.get('num_immobili', 0),
                 f"{l.get('similarity_score', 0):.3f}"
