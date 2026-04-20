@@ -991,8 +991,6 @@ class PartitaDetailsDialog(QDialog):
             for i, imm in enumerate(partita['immobili']):
                 report_lines.append(f"  - Immobile {i+1} (ID: {imm.get('id', 'N/D')}): {imm.get('natura', 'N/D')}")
                 localita_info = f"{imm.get('localita_nome', '')}"
-                if imm.get('civico') is not None and str(imm.get('civico')).strip() != '':
-                    localita_info += f", civ. {imm.get('civico')}"
                 if imm.get('localita_tipo'):
                     localita_info += f" ({imm.get('localita_tipo')})"
                 report_lines.append(f"    Località: {localita_info.strip() if localita_info.strip() else 'N/A'}")
@@ -1339,12 +1337,16 @@ class ModificaPartitaDialog(QDialog):
         self.btn_duplica_partita.clicked.connect(self._handle_duplica_partita)
         self.save_button.clicked.connect(self._save_changes)
         self.close_dialog_button.clicked.connect(self.accept)
+        self.btn_archivia_partita = QPushButton("Archivia Partita...")
+        self.btn_archivia_partita.setToolTip("Archivia logicamente questa partita (non cancella i dati).")
+        self.btn_archivia_partita.clicked.connect(self._archivia_partita)
         buttons_layout.addWidget(self.btn_duplica_partita)
+        buttons_layout.addWidget(self.btn_archivia_partita)
         buttons_layout.addStretch()
         buttons_layout.addWidget(self.save_button)
         buttons_layout.addWidget(self.close_dialog_button)
         main_layout.addLayout(buttons_layout)
-        
+
         self.setLayout(main_layout)
 
     # --- Metodi per il Caricamento dei Dati (Centralizzato) ---
@@ -1467,8 +1469,6 @@ class ModificaPartitaDialog(QDialog):
                     localita_text = ""
                     if 'localita_nome' in imm:
                         localita_text = imm['localita_nome']
-                        if 'civico' in imm and imm['civico'] is not None:
-                            localita_text += f", {imm['civico']}"
                         if 'localita_tipo' in imm:
                             localita_text += f" ({imm['localita_tipo']})"
                     self.immobili_table.setItem(row_idx, 4, QTableWidgetItem(localita_text))
@@ -1555,6 +1555,25 @@ class ModificaPartitaDialog(QDialog):
 
     # In gui_widgets.py, nella classe ModificaPartitaDialog
 # Sostituisci il metodo _load_documenti_allegati() con questa versione corretta:
+    def _archivia_partita(self):
+        risposta = QMessageBox.question(
+            self, "Conferma Archiviazione",
+            f"Archiviare la partita ID {self.partita_id}?\n\n"
+            "Il record rimarrà nel database ma non sarà visibile nelle ricerche standard.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if risposta != QMessageBox.Yes:
+            return
+        try:
+            self.db_manager.archivia_partita(self.partita_id)
+            QMessageBox.information(self, "Archiviazione Completata",
+                                    f"Partita ID {self.partita_id} archiviata con successo.")
+            self.accept()
+        except (DBNotFoundError, DBDataError, DBMError) as e:
+            QMessageBox.critical(self, "Errore", f"Impossibile archiviare la partita:\n{e}")
+        except Exception as e:
+            QMessageBox.critical(self, "Errore Imprevisto", str(e))
+
     def _handle_duplica_partita(self):
         """Gestisce il click sul pulsante 'Duplica', apre il dialogo delle opzioni e avvia l'operazione."""
         self.logger.info(f"Richiesta duplicazione per la partita ID {self.partita_id}.")
@@ -1715,7 +1734,7 @@ class ModificaPartitaDialog(QDialog):
 
         self.logger.info(f"Possessore selezionato/creato: ID {selected_possessore_id}, Nome: {selected_possessore_nome}")
         tipo_partita_corrente = self.partita_data_originale.get('tipo', 'principale')
-        dettagli_legame = DettagliLegamePossessoreDialog.get_details_for_new_legame(selected_possessore_nome, tipo_partita_corrente, self)
+        dettagli_legame = DettagliLegamePossessoreDialog.get_details_for_new_legame(selected_possessore_nome, tipo_partita_corrente, db_manager=self.db_manager, parent=self)
 
         if not dettagli_legame:
             self.logger.info("Inserimento dettagli legame annullato.")
@@ -1763,7 +1782,8 @@ class ModificaPartitaDialog(QDialog):
         self.logger.debug(f"Richiesta modifica legame per relazione ID {id_relazione_pp} (Possessore: {nome_possessore_attuale})")
         tipo_partita_corrente = self.partita_data_originale.get('tipo', 'principale')
         nuovi_dettagli_legame = DettagliLegamePossessoreDialog.get_details_for_edit_legame(
-            nome_possessore_attuale, tipo_partita_corrente, titolo_attuale, quota_attuale, self
+            nome_possessore_attuale, tipo_partita_corrente, titolo_attuale, quota_attuale,
+            db_manager=self.db_manager, parent=self
         )
 
         if not nuovi_dettagli_legame:
@@ -2296,35 +2316,49 @@ class ModificaPartitaDialog(QDialog):
 
 class DettagliLegamePossessoreDialog(QDialog):
     def __init__(self, nome_possessore_selezionato: str, partita_tipo: str,
-                 titolo_attuale: Optional[str] = None,  # Nuovo
-                 quota_attuale: Optional[str] = None,   # Nuovo
+                 db_manager=None,
+                 titolo_attuale: Optional[str] = None,
+                 quota_attuale: Optional[str] = None,
                  parent=None):
         super().__init__(parent)
+        self.db_manager = db_manager
         self.setWindowTitle(
             f"Dettagli Legame per {nome_possessore_selezionato}")
         self.setMinimumWidth(400)
 
         self.titolo: Optional[str] = None
         self.quota: Optional[str] = None
-        # self.tipo_partita_rel: str = partita_tipo
 
         layout = QFormLayout(self)
 
-        self.titolo_edit = QLineEdit()
-        self.titolo_edit.setPlaceholderText(
-            "Es. proprietà esclusiva, usufrutto")
-        self.titolo_edit.setText(
-            titolo_attuale if titolo_attuale is not None else "proprietà esclusiva")  # Pre-compila
-        layout.addRow("Titolo di Possesso (*):", self.titolo_edit)
+        TITOLI_FALLBACK = [
+            "proprietà esclusiva", "comproprietà", "usufrutto",
+            "nuda proprietà", "enfiteusi", "superficie", "uso", "abitazione", "servitù",
+        ]
+        self.titolo_combo = QComboBox()
+        self.titolo_combo.setEditable(True)
+        titoli_nomi = TITOLI_FALLBACK
+        if self.db_manager is not None:
+            try:
+                titoli_nomi = [t['nome'] for t in self.db_manager.get_titoli_possesso()] or TITOLI_FALLBACK
+            except Exception:
+                pass
+        self.titolo_combo.addItems(titoli_nomi)
+        valore_iniziale = titolo_attuale if titolo_attuale is not None else "proprietà esclusiva"
+        idx = self.titolo_combo.findText(valore_iniziale)
+        if idx >= 0:
+            self.titolo_combo.setCurrentIndex(idx)
+        else:
+            self.titolo_combo.setCurrentText(valore_iniziale)
+        layout.addRow("Titolo di Possesso (*):", self.titolo_combo)
 
         self.quota_edit = QLineEdit()
         self.quota_edit.setPlaceholderText(
             "Es. 1/1, 1/2 (lasciare vuoto se non applicabile)")
         self.quota_edit.setText(
-            quota_attuale if quota_attuale is not None else "")  # Pre-compila
+            quota_attuale if quota_attuale is not None else "")
         layout.addRow("Quota (opzionale):", self.quota_edit)
 
-        # ... (pulsanti OK/Annulla e metodo _accept_details come prima) ...
         buttons_layout = QHBoxLayout()
         self.ok_button = QPushButton(
             QApplication.style().standardIcon(QStyle.SP_DialogOkButton), "OK")
@@ -2337,15 +2371,14 @@ class DettagliLegamePossessoreDialog(QDialog):
         buttons_layout.addWidget(self.cancel_button)
         layout.addRow(buttons_layout)
         self.setLayout(layout)
-        self.titolo_edit.setFocus()
+        self.titolo_combo.setFocus()
 
     def _accept_details(self):
-        # ... (come prima) ...
-        titolo_val = self.titolo_edit.text().strip()
+        titolo_val = self.titolo_combo.currentText().strip()
         if not titolo_val:
             QMessageBox.warning(self, "Dato Mancante",
                                 "Il titolo di possesso è obbligatorio.")
-            self.titolo_edit.setFocus()
+            self.titolo_combo.setFocus()
             return
         self.titolo = titolo_val
         self.quota = self.quota_edit.text().strip() or None
@@ -2354,40 +2387,29 @@ class DettagliLegamePossessoreDialog(QDialog):
     # Metodo statico per l'inserimento (come prima)
 
     @staticmethod
-    def get_details_for_new_legame(nome_possessore: str, tipo_partita_attuale: str, parent=None) -> Optional[Dict[str, Any]]:
-        # Chiamiamo il costruttore senza titolo_attuale e quota_attuale,
-        # così userà i default (None) e quindi il testo placeholder o il default "proprietà esclusiva"
+    def get_details_for_new_legame(nome_possessore: str, tipo_partita_attuale: str, db_manager=None, parent=None) -> Optional[Dict[str, Any]]:
         dialog = DettagliLegamePossessoreDialog(
             nome_possessore_selezionato=nome_possessore,
             partita_tipo=tipo_partita_attuale,
-            # titolo_attuale e quota_attuale non vengono passati,
-            # quindi __init__ userà i loro valori di default (None)
+            db_manager=db_manager,
             parent=parent
         )
         if dialog.exec_() == QDialog.Accepted:
-            return {
-                "titolo": dialog.titolo,
-                "quota": dialog.quota,
-                # "tipo_partita_rel": dialog.tipo_partita_rel # Se lo gestisci
-            }
+            return {"titolo": dialog.titolo, "quota": dialog.quota}
         return None
 
-    # NUOVO Metodo statico per la modifica
     @staticmethod
     def get_details_for_edit_legame(nome_possessore: str, tipo_partita_attuale: str,
                                     titolo_init: str, quota_init: Optional[str],
-                                    parent=None) -> Optional[Dict[str, Any]]:
+                                    db_manager=None, parent=None) -> Optional[Dict[str, Any]]:
         dialog = DettagliLegamePossessoreDialog(nome_possessore, tipo_partita_attuale,
+                                                db_manager=db_manager,
                                                 titolo_attuale=titolo_init,
                                                 quota_attuale=quota_init,
                                                 parent=parent)
-        # Titolo specifico per modifica
         dialog.setWindowTitle(f"Modifica Legame per {nome_possessore}")
         if dialog.exec_() == QDialog.Accepted:
-            return {
-                "titolo": dialog.titolo,
-                "quota": dialog.quota,
-            }
+            return {"titolo": dialog.titolo, "quota": dialog.quota}
         return None
 
 class ModificaPossessoreDialog(QDialog):
@@ -2463,13 +2485,36 @@ class ModificaPossessoreDialog(QDialog):
             QStyle.SP_DialogCancelButton), "Annulla")
         self.cancel_button.clicked.connect(self.reject)
 
+        self.btn_archivia_possessore = QPushButton("Archivia Possessore...")
+        self.btn_archivia_possessore.setToolTip("Archivia logicamente questo possessore (imposta attivo=FALSE, non cancella i dati).")
+        self.btn_archivia_possessore.clicked.connect(self._archivia_possessore)
+        buttons_layout.addWidget(self.btn_archivia_possessore)
         buttons_layout.addStretch()
         buttons_layout.addWidget(self.save_button)
         buttons_layout.addWidget(self.cancel_button)
         layout.addLayout(buttons_layout)
 
         self.setLayout(layout)
-        
+
+    def _archivia_possessore(self):
+        risposta = QMessageBox.question(
+            self, "Conferma Archiviazione",
+            f"Archiviare il possessore ID {self.possessore_id}?\n\n"
+            "Il record rimarrà nel database ma non sarà visibile nelle ricerche standard.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if risposta != QMessageBox.Yes:
+            return
+        try:
+            self.db_manager.archivia_possessore(self.possessore_id)
+            QMessageBox.information(self, "Archiviazione Completata",
+                                    f"Possessore ID {self.possessore_id} archiviato con successo.")
+            self.accept()
+        except (DBNotFoundError, DBDataError, DBMError) as e:
+            QMessageBox.critical(self, "Errore", f"Impossibile archiviare il possessore:\n{e}")
+        except Exception as e:
+            QMessageBox.critical(self, "Errore Imprevisto", str(e))
+
     # --- NUOVO METODO: per generare il nome completo ---
     def _genera_nome_completo(self):
         """
@@ -2660,12 +2705,40 @@ class ModificaComuneDialog(QDialog):
 
         main_layout.addLayout(form_layout)
 
-        self.button_box = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
-        self.button_box.accepted.connect(self._save_changes)
-        self.button_box.rejected.connect(self.reject)
-        main_layout.addWidget(self.button_box)
+        comune_buttons_layout = QHBoxLayout()
+        self.btn_archivia_comune = QPushButton("Archivia Comune...")
+        self.btn_archivia_comune.setToolTip("Archivia logicamente questo comune (non cancella i dati).")
+        self.btn_archivia_comune.clicked.connect(self._archivia_comune)
+        self.btn_salva_comune = QPushButton("Salva Modifiche")
+        self.btn_salva_comune.clicked.connect(self._save_changes)
+        self.btn_annulla_comune = QPushButton("Annulla")
+        self.btn_annulla_comune.clicked.connect(self.reject)
+        comune_buttons_layout.addWidget(self.btn_archivia_comune)
+        comune_buttons_layout.addStretch()
+        comune_buttons_layout.addWidget(self.btn_salva_comune)
+        comune_buttons_layout.addWidget(self.btn_annulla_comune)
+        main_layout.addLayout(comune_buttons_layout)
 
         self.setLayout(main_layout)
+
+    def _archivia_comune(self):
+        risposta = QMessageBox.question(
+            self, "Conferma Archiviazione",
+            f"Archiviare il comune ID {self.comune_id}?\n\n"
+            "Il record rimarrà nel database ma non sarà visibile nelle ricerche standard.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if risposta != QMessageBox.Yes:
+            return
+        try:
+            self.db_manager.archivia_comune(self.comune_id)
+            QMessageBox.information(self, "Archiviazione Completata",
+                                    f"Comune ID {self.comune_id} archiviato con successo.")
+            self.accept()
+        except (DBNotFoundError, DBDataError, DBMError) as e:
+            QMessageBox.critical(self, "Errore", f"Impossibile archiviare il comune:\n{e}")
+        except Exception as e:
+            QMessageBox.critical(self, "Errore Imprevisto", str(e))
 
     def _load_comune_data(self):
         # Per prima cosa, carichiamo tutti i periodi disponibili nel ComboBox
@@ -3168,16 +3241,40 @@ class ModificaLocalitaDialog(QDialog):
         form_layout.addRow("Nome Località (*):", self.nome_edit)
         self.tipo_combo = QComboBox()
         form_layout.addRow("Tipo (*):", self.tipo_combo)
-        self.civico_spinbox = QSpinBox()
-        self.civico_spinbox.setMinimum(0); self.civico_spinbox.setMaximum(99999)
-        self.civico_spinbox.setSpecialValueText("Nessuno")
-        form_layout.addRow("Numero Civico (0 se assente):", self.civico_spinbox)
         layout.addLayout(form_layout)
-        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel, self)
-        buttons.accepted.connect(self._save_changes)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+        localita_buttons_layout = QHBoxLayout()
+        self.btn_archivia_localita = QPushButton("Archivia Località...")
+        self.btn_archivia_localita.setToolTip("Archivia logicamente questa località (non cancella i dati).")
+        self.btn_archivia_localita.clicked.connect(self._archivia_localita)
+        btn_salva_localita = QPushButton("Salva Modifiche")
+        btn_salva_localita.clicked.connect(self._save_changes)
+        btn_annulla_localita = QPushButton("Annulla")
+        btn_annulla_localita.clicked.connect(self.reject)
+        localita_buttons_layout.addWidget(self.btn_archivia_localita)
+        localita_buttons_layout.addStretch()
+        localita_buttons_layout.addWidget(btn_salva_localita)
+        localita_buttons_layout.addWidget(btn_annulla_localita)
+        layout.addLayout(localita_buttons_layout)
         self.setLayout(layout)
+
+    def _archivia_localita(self):
+        risposta = QMessageBox.question(
+            self, "Conferma Archiviazione",
+            f"Archiviare la località ID {self.localita_id}?\n\n"
+            "Il record rimarrà nel database ma non sarà visibile nelle ricerche standard.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if risposta != QMessageBox.Yes:
+            return
+        try:
+            self.db_manager.archivia_localita(self.localita_id)
+            QMessageBox.information(self, "Archiviazione Completata",
+                                    f"Località ID {self.localita_id} archiviata con successo.")
+            self.accept()
+        except (DBNotFoundError, DBDataError, DBMError) as e:
+            QMessageBox.critical(self, "Errore", f"Impossibile archiviare la località:\n{e}")
+        except Exception as e:
+            QMessageBox.critical(self, "Errore Imprevisto", str(e))
 
     def _load_tipi_localita(self):
         """Carica dinamicamente le tipologie di località nel ComboBox."""
@@ -3208,8 +3305,6 @@ class ModificaLocalitaDialog(QDialog):
                 self.tipo_combo.setCurrentIndex(index)
         # --- FINE MODIFICA ---
 
-        civico_val = self.localita_data_originale.get('civico')
-        self.civico_spinbox.setValue(civico_val if civico_val is not None else 0)
 
     def _save_changes(self):
         # Recupera l'ID dal ComboBox invece del testo
@@ -3221,8 +3316,7 @@ class ModificaLocalitaDialog(QDialog):
 
         dati_modificati = {
             "nome": self.nome_edit.text().strip(),
-            "tipo_id": tipo_id_selezionato, # <-- MODIFICA QUI
-            "civico": self.civico_spinbox.value() if self.civico_spinbox.value() > 0 else None
+            "tipo_id": tipo_id_selezionato,
         }
         # ... (la logica di validazione e chiamata a update_localita rimane la stessa)
         if not dati_modificati["nome"]:
@@ -3446,17 +3540,12 @@ class LocalitaSelectionDialog(QDialog):
         if not self.selection_mode:
             create_tab = QWidget()
             create_form_layout = QFormLayout(create_tab)
-            self.nome_edit_nuova = QLineEdit() 
-            self.tipo_combo_nuova = QComboBox() 
+            self.nome_edit_nuova = QLineEdit()
+            self.tipo_combo_nuova = QComboBox()
             self.tipo_combo_nuova.addItems(["Regione", "Via", "Borgata", "Altro"])
-            self.civico_spinbox_nuova = QSpinBox() 
-            self.civico_spinbox_nuova.setMinimum(0)
-            self.civico_spinbox_nuova.setMaximum(99999)
-            self.civico_spinbox_nuova.setSpecialValueText("Nessuno") 
             create_form_layout.addRow(QLabel("Nome località (*):"), self.nome_edit_nuova)
             create_form_layout.addRow(QLabel("Tipo (*):"), self.tipo_combo_nuova)
-            create_form_layout.addRow(QLabel("Numero Civico (0 se assente):"), self.civico_spinbox_nuova)
-            self.btn_salva_nuova_localita = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton) ,"Salva Nuova Località")
+            self.btn_salva_nuova_localita = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton), "Salva Nuova Località")
             self.btn_salva_nuova_localita.clicked.connect(self._salva_nuova_localita_da_tab)
             create_form_layout.addRow(self.btn_salva_nuova_localita)
             self.tabs.addTab(create_tab, "Crea Nuova Località")
@@ -3483,7 +3572,6 @@ class LocalitaSelectionDialog(QDialog):
 
         self.load_localita()
         self._tab_changed(self.tabs.currentIndex()) # Imposta lo stato iniziale del pulsante
-     # --- INIZIO METODO MANCANTE/DA RIPRISTINARE ---
     def load_localita(self, filter_text: Optional[str] = None):
         """
         Carica le località per il comune_id corrente, applicando un filtro testuale opzionale.
@@ -3511,10 +3599,6 @@ class LocalitaSelectionDialog(QDialog):
                             i, 1, QTableWidgetItem(loc.get('nome', '')))
                         self.localita_table.setItem(
                             i, 2, QTableWidgetItem(loc.get('tipo', '')))
-                        civico_text = str(loc.get('civico', '')) if loc.get(
-                            'civico') is not None else "-"
-                        self.localita_table.setItem(
-                            i, 3, QTableWidgetItem(civico_text))
                     self.localita_table.resizeColumnsToContents()
                 else:
                     self.logger.info(f"Nessuna località trovata per comune ID {self.comune_id} con filtro '{actual_filter_text}'.")
@@ -3545,9 +3629,7 @@ class LocalitaSelectionDialog(QDialog):
 
         self.localita_table.setSortingEnabled(True)
         self._aggiorna_stato_pulsanti_action_localita() # Aggiorna stato pulsanti
-    # --- FINE METODO MANCANTE/DA RIPRISTINARE ---
 
-    # --- INIZIO METODO MANCANTE/DA RIPRISTINARE ---
     def _handle_double_click(self, item: QTableWidgetItem):
         """Gestisce il doppio click sulla tabella."""
         if self.selection_mode and self.tabs.currentIndex() == 0:
@@ -3557,7 +3639,6 @@ class LocalitaSelectionDialog(QDialog):
             # Se non in modalità selezione (ovvero gestione) e nel tab di visualizzazione,
             # il doppio click apre la modifica (se l'utente ha i permessi e una riga è selezionata).
             self.apri_modifica_localita_selezionata()
-    # --- FINE METODO MANCANTE/DA RIPRISTINARE ---
     def _aggiorna_stato_pulsanti_action_localita(self):
         """Abilita/disabilita i pulsanti di azione (Modifica, Seleziona) in base alla selezione nella tabella."""
         is_select_tab_active = (self.tabs.currentIndex() == 0)
@@ -3571,7 +3652,6 @@ class LocalitaSelectionDialog(QDialog):
         # Pulsante Seleziona (visibile e attivo solo se nel tab corretto e c'è selezione)
         # La visibilità del pulsante "Seleziona" è gestita in _tab_changed e _init_ui
         self.select_button.setEnabled(is_select_tab_active and has_selection_in_table)
-    # --- FINE METODO MANCANTE/DA RIPRISTINARE ---
 
 
     def _tab_changed(self, index):
@@ -3593,8 +3673,6 @@ class LocalitaSelectionDialog(QDialog):
             
         self._aggiorna_stato_pulsanti_action_localita() # Aggiorna abilitazione
 
-    # --- MODIFICA CRUCIALE: Unifica la gestione di selezione ed creazione ---
-    # --- INIZIO METODO MANCANTE/DA RIPRISTINARE ---
     def apri_modifica_localita_selezionata(self):
         """
         Apre un dialogo per modificare la località selezionata dalla tabella.
@@ -3630,7 +3708,6 @@ class LocalitaSelectionDialog(QDialog):
         if id_item and id_item.text().isdigit():
             return int(id_item.text())
         return None
-    # --- FINE METODO MANCANTE/DA RIPRISTINARE ---
     def _handle_selection_or_creation(self):
         """
         Gestisce la selezione di una località esistente o la creazione/selezione di una nuova.
@@ -3654,11 +3731,8 @@ class LocalitaSelectionDialog(QDialog):
                 self.selected_localita_id = int(self.localita_table.item(current_row, 0).text())
                 nome = self.localita_table.item(current_row, 1).text()
                 tipo = self.localita_table.item(current_row, 2).text()
-                civico_item_text = self.localita_table.item(current_row, 3).text()
 
                 self.selected_localita_name = nome
-                if civico_item_text and civico_item_text != "-" and civico_item_text.strip() != self.civico_spinbox_nuova.specialValueText(): # Verifica anche il testo speciale
-                    self.selected_localita_name += f", civ. {civico_item_text}"
                 if tipo:
                     self.selected_localita_name += f" ({tipo})"
                 
@@ -3674,18 +3748,12 @@ class LocalitaSelectionDialog(QDialog):
         elif current_tab_index == 1 and not self.selection_mode: # Tab "Crea Nuova Località" (solo se in modalità gestione)
             nome = self.nome_edit_nuova.text().strip()
             tipo = self.tipo_combo_nuova.currentText()
-            civico_val = self.civico_spinbox_nuova.value()
-            
-            # Determina il valore finale del civico (NULL se 0 o testo speciale)
-            civico = None
-            if self.civico_spinbox_nuova.text().strip() != self.civico_spinbox_nuova.specialValueText() and civico_val != 0:
-                civico = civico_val
 
             if not nome:
                 QMessageBox.warning(self, "Dati Mancanti", "Il nome della località è obbligatorio.")
                 self.nome_edit_nuova.setFocus()
                 return
-            if not tipo or tipo.strip() == "Seleziona Tipo...": # Se avevi aggiunto un placeholder
+            if not tipo or tipo.strip() == "Seleziona Tipo...":
                 QMessageBox.warning(self, "Dati Mancanti", "Il tipo di località è obbligatorio.")
                 self.tipo_combo_nuova.setFocus()
                 return
@@ -3694,17 +3762,13 @@ class LocalitaSelectionDialog(QDialog):
                 return
 
             try:
-                localita_id_creata = self.db_manager.insert_localita(
-                    self.comune_id, nome, tipo, civico
+                localita_id_creata = self.db_manager.create_localita(
+                    self.comune_id, nome, tipo
                 )
 
                 if localita_id_creata is not None:
-                    # Imposta gli attributi selected_localita_id e selected_localita_name
-                    # che verranno letti dal chiamante (ImmobileDialog).
                     self.selected_localita_id = localita_id_creata
                     self.selected_localita_name = nome
-                    if civico is not None:
-                        self.selected_localita_name += f", civ. {civico}"
                     self.selected_localita_name += f" ({tipo})"
 
                     QMessageBox.information(self, "Località Creata", f"Località '{self.selected_localita_name}' registrata con ID: {self.selected_localita_id}.")
@@ -3731,29 +3795,21 @@ class LocalitaSelectionDialog(QDialog):
              else:
                 QMessageBox.warning(self, "Azione Non Valida", "Azione non riconosciuta per il tab corrente.")
 
-    # Aggiungi questo metodo per pulire i campi del tab "Crea Nuova Località"
     def _pulisci_campi_creazione_localita(self):
         self.nome_edit_nuova.clear()
         self.tipo_combo_nuova.setCurrentIndex(0)
-        self.civico_spinbox_nuova.setValue(self.civico_spinbox_nuova.minimum()) # Resetta al "Nessuno"
-    # --- INIZIO METODO MANCANTE/DA RIPRISTINARE ---
     def _salva_nuova_localita_da_tab(self):
         """
         Salva una nuova località dal tab "Crea Nuova Località".
         """
         nome = self.nome_edit_nuova.text().strip()
-        tipo = self.tipo_combo_nuova.currentText()
-        civico_val = self.civico_spinbox_nuova.value()
-
-        civico = None
-        if self.civico_spinbox_nuova.text().strip() != self.civico_spinbox_nuova.specialValueText() and civico_val != 0:
-            civico = civico_val
+        tipo_id = self.tipo_combo_nuova.currentData()
 
         if not nome:
             QMessageBox.warning(self, "Dati Mancanti", "Il nome della località è obbligatorio.")
             self.nome_edit_nuova.setFocus()
             return
-        if not tipo or tipo.strip() == "Seleziona Tipo...": # Se avevi aggiunto un placeholder
+        if tipo_id is None:
             QMessageBox.warning(self, "Dati Mancanti", "Il tipo di località è obbligatorio.")
             self.tipo_combo_nuova.setFocus()
             return
@@ -3762,8 +3818,8 @@ class LocalitaSelectionDialog(QDialog):
             return
 
         try:
-            localita_id_creata = self.db_manager.insert_localita(
-                self.comune_id, nome, tipo, civico
+            localita_id_creata = self.db_manager.create_localita(
+                self.comune_id, nome, tipo_id
             )
 
             if localita_id_creata is not None:
@@ -3784,18 +3840,13 @@ class LocalitaSelectionDialog(QDialog):
             self.logger.critical(f"Errore imprevisto creazione località: {e}", exc_info=True)
             QMessageBox.critical(self, "Errore Imprevisto", f"Si è verificato un errore:\n{e}")
 
-    def _pulisci_campi_creazione_localita(self):
-        self.nome_edit_nuova.clear()
-        self.tipo_combo_nuova.setCurrentIndex(0)
-        self.civico_spinbox_nuova.setValue(self.civico_spinbox_nuova.minimum()) # Resetta al "Nessuno"
-    # --- FINE METODO MANCANTE/DA RIPRISTINARE ---
 class ModificaImmobileDialog(QDialog):
     """
     Dialogo per la modifica dei dettagli di un singolo immobile.
     """
     def __init__(self, db_manager, immobile_id: int, comune_id_partita: int, parent=None):
         super().__init__(parent)
-        
+        self.logger = logging.getLogger(__name__)
         # --- Parametri e stato interno ---
         self.db_manager = db_manager
         self.immobile_id = immobile_id
@@ -3861,11 +3912,11 @@ class ModificaImmobileDialog(QDialog):
 
         # Carica le località per il comune specifico
         try:
-            localita_list = self.db_manager.get_localita_per_comune(self.comune_id_partita)
-            for loc_id, nome_localita in localita_list:
-                self.localita_combo.addItem(nome_localita, userData=loc_id)
+            localita_list = self.db_manager.get_localita_by_comune(self.comune_id_partita)
+            for loc in localita_list:
+                self.localita_combo.addItem(loc['nome'], userData=loc['id'])
         except Exception as e:
-            print(f"Errore nel caricamento delle località: {e}")
+            self.logger.error(f"Errore nel caricamento delle località: {e}", exc_info=True)
             self.localita_combo.addItem("Errore caricamento", -1)
 
     def _load_initial_data(self):
@@ -3992,6 +4043,9 @@ class PossessoreSelectionDialog(QDialog):
         create_layout.addRow("Cognome e Nome (*):", self.cognome_edit)
         self.paternita_edit = QLineEdit()
         create_layout.addRow("Paternità:", self.paternita_edit)
+        self.btn_genera_nome = QPushButton("Genera Nome Completo")
+        self.btn_genera_nome.clicked.connect(self._genera_nome_completo)
+        create_layout.addRow("", self.btn_genera_nome)
         self.nome_completo_edit = QLineEdit()
         create_layout.addRow("Nome Completo (*):", self.nome_completo_edit)
 
@@ -4015,6 +4069,14 @@ class PossessoreSelectionDialog(QDialog):
         self.cancel_button.clicked.connect(self.reject)
         buttons_layout.addWidget(self.cancel_button)
         layout.addLayout(buttons_layout)
+
+    def _genera_nome_completo(self):
+        cognome_nome = self.cognome_edit.text().strip()
+        paternita = self.paternita_edit.text().strip()
+        if cognome_nome and paternita:
+            self.nome_completo_edit.setText(f"{cognome_nome} {paternita}")
+        elif cognome_nome:
+            self.nome_completo_edit.setText(cognome_nome)
 
     def load_data(self):
         """Carica i dati per entrambi i tab (lista possessori e lista comuni)."""
@@ -4207,8 +4269,8 @@ class ImmobileDialog(QDialog):
         result = dialog.exec_()
 
         # Il LocalitaSelectionDialog, se modificato per get_selected_or_created_localita,
-        # dovrebbe restituire un dizionario con id e nome (compreso il civico).
-        # Ad esempio: { 'id': 1, 'nome': 'Via Roma, 12 (Via)' }
+        # dovrebbe restituire un dizionario con id e nome.
+        # Ad esempio: { 'id': 1, 'nome': 'Via Roma 11A (Via)' }
         if result == QDialog.Accepted:
             if dialog.selected_localita_id is not None and dialog.selected_localita_name is not None:
                 self.localita_id = dialog.selected_localita_id
@@ -4713,17 +4775,12 @@ class LocalitaSelectionDialog(QDialog):
         if not self.selection_mode:
             create_tab = QWidget()
             create_form_layout = QFormLayout(create_tab)
-            self.nome_edit_nuova = QLineEdit() 
-            self.tipo_combo_nuova = QComboBox() 
+            self.nome_edit_nuova = QLineEdit()
+            self.tipo_combo_nuova = QComboBox()
             self.tipo_combo_nuova.addItems(["Regione", "Via", "Borgata", "Altro"])
-            self.civico_spinbox_nuova = QSpinBox() 
-            self.civico_spinbox_nuova.setMinimum(0)
-            self.civico_spinbox_nuova.setMaximum(99999)
-            self.civico_spinbox_nuova.setSpecialValueText("Nessuno") 
             create_form_layout.addRow(QLabel("Nome località (*):"), self.nome_edit_nuova)
             create_form_layout.addRow(QLabel("Tipo (*):"), self.tipo_combo_nuova)
-            create_form_layout.addRow(QLabel("Numero Civico (0 se assente):"), self.civico_spinbox_nuova)
-            self.btn_salva_nuova_localita = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton) ,"Salva Nuova Località")
+            self.btn_salva_nuova_localita = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton), "Salva Nuova Località")
             self.btn_salva_nuova_localita.clicked.connect(self._salva_nuova_localita_da_tab)
             create_form_layout.addRow(self.btn_salva_nuova_localita)
             self.tabs.addTab(create_tab, "Crea Nuova Località")
@@ -4750,7 +4807,6 @@ class LocalitaSelectionDialog(QDialog):
 
         self.load_localita()
         self._tab_changed(self.tabs.currentIndex()) # Imposta lo stato iniziale del pulsante
-     # --- INIZIO METODO MANCANTE/DA RIPRISTINARE ---
     def load_localita(self, filter_text: Optional[str] = None):
         """
         Carica le località per il comune_id corrente, applicando un filtro testuale opzionale.
@@ -4778,10 +4834,6 @@ class LocalitaSelectionDialog(QDialog):
                             i, 1, QTableWidgetItem(loc.get('nome', '')))
                         self.localita_table.setItem(
                             i, 2, QTableWidgetItem(loc.get('tipo', '')))
-                        civico_text = str(loc.get('civico', '')) if loc.get(
-                            'civico') is not None else "-"
-                        self.localita_table.setItem(
-                            i, 3, QTableWidgetItem(civico_text))
                     self.localita_table.resizeColumnsToContents()
                 else:
                     self.logger.info(f"Nessuna località trovata per comune ID {self.comune_id} con filtro '{actual_filter_text}'.")
@@ -4812,9 +4864,7 @@ class LocalitaSelectionDialog(QDialog):
 
         self.localita_table.setSortingEnabled(True)
         self._aggiorna_stato_pulsanti_action_localita() # Aggiorna stato pulsanti
-    # --- FINE METODO MANCANTE/DA RIPRISTINARE ---
 
-    # --- INIZIO METODO MANCANTE/DA RIPRISTINARE ---
     def _handle_double_click(self, item: QTableWidgetItem):
         """Gestisce il doppio click sulla tabella."""
         if self.selection_mode and self.tabs.currentIndex() == 0:
@@ -4824,7 +4874,6 @@ class LocalitaSelectionDialog(QDialog):
             # Se non in modalità selezione (ovvero gestione) e nel tab di visualizzazione,
             # il doppio click apre la modifica (se l'utente ha i permessi e una riga è selezionata).
             self.apri_modifica_localita_selezionata()
-    # --- FINE METODO MANCANTE/DA RIPRISTINARE ---
     def _aggiorna_stato_pulsanti_action_localita(self):
         """Abilita/disabilita i pulsanti di azione (Modifica, Seleziona) in base alla selezione nella tabella."""
         is_select_tab_active = (self.tabs.currentIndex() == 0)
@@ -4838,7 +4887,6 @@ class LocalitaSelectionDialog(QDialog):
         # Pulsante Seleziona (visibile e attivo solo se nel tab corretto e c'è selezione)
         # La visibilità del pulsante "Seleziona" è gestita in _tab_changed e _init_ui
         self.select_button.setEnabled(is_select_tab_active and has_selection_in_table)
-    # --- FINE METODO MANCANTE/DA RIPRISTINARE ---
 
 
     def _tab_changed(self, index):
@@ -4860,8 +4908,6 @@ class LocalitaSelectionDialog(QDialog):
             
         self._aggiorna_stato_pulsanti_action_localita() # Aggiorna abilitazione
 
-    # --- MODIFICA CRUCIALE: Unifica la gestione di selezione ed creazione ---
-    # --- INIZIO METODO MANCANTE/DA RIPRISTINARE ---
     def apri_modifica_localita_selezionata(self):
         """
         Apre un dialogo per modificare la località selezionata dalla tabella.
@@ -4894,7 +4940,6 @@ class LocalitaSelectionDialog(QDialog):
         if id_item and id_item.text().isdigit():
             return int(id_item.text())
         return None
-    # --- FINE METODO MANCANTE/DA RIPRISTINARE ---
     def _handle_selection_or_creation(self):
         """
         Gestisce la selezione di una località esistente o la creazione/selezione di una nuova.
@@ -4918,11 +4963,8 @@ class LocalitaSelectionDialog(QDialog):
                 self.selected_localita_id = int(self.localita_table.item(current_row, 0).text())
                 nome = self.localita_table.item(current_row, 1).text()
                 tipo = self.localita_table.item(current_row, 2).text()
-                civico_item_text = self.localita_table.item(current_row, 3).text()
 
                 self.selected_localita_name = nome
-                if civico_item_text and civico_item_text != "-" and civico_item_text.strip() != self.civico_spinbox_nuova.specialValueText(): # Verifica anche il testo speciale
-                    self.selected_localita_name += f", civ. {civico_item_text}"
                 if tipo:
                     self.selected_localita_name += f" ({tipo})"
                 
@@ -4938,18 +4980,12 @@ class LocalitaSelectionDialog(QDialog):
         elif current_tab_index == 1 and not self.selection_mode: # Tab "Crea Nuova Località" (solo se in modalità gestione)
             nome = self.nome_edit_nuova.text().strip()
             tipo = self.tipo_combo_nuova.currentText()
-            civico_val = self.civico_spinbox_nuova.value()
-            
-            # Determina il valore finale del civico (NULL se 0 o testo speciale)
-            civico = None
-            if self.civico_spinbox_nuova.text().strip() != self.civico_spinbox_nuova.specialValueText() and civico_val != 0:
-                civico = civico_val
 
             if not nome:
                 QMessageBox.warning(self, "Dati Mancanti", "Il nome della località è obbligatorio.")
                 self.nome_edit_nuova.setFocus()
                 return
-            if not tipo or tipo.strip() == "Seleziona Tipo...": # Se avevi aggiunto un placeholder
+            if not tipo or tipo.strip() == "Seleziona Tipo...":
                 QMessageBox.warning(self, "Dati Mancanti", "Il tipo di località è obbligatorio.")
                 self.tipo_combo_nuova.setFocus()
                 return
@@ -4958,17 +4994,13 @@ class LocalitaSelectionDialog(QDialog):
                 return
 
             try:
-                localita_id_creata = self.db_manager.insert_localita(
-                    self.comune_id, nome, tipo, civico
+                localita_id_creata = self.db_manager.create_localita(
+                    self.comune_id, nome, tipo
                 )
 
                 if localita_id_creata is not None:
-                    # Imposta gli attributi selected_localita_id e selected_localita_name
-                    # che verranno letti dal chiamante (ImmobileDialog).
                     self.selected_localita_id = localita_id_creata
                     self.selected_localita_name = nome
-                    if civico is not None:
-                        self.selected_localita_name += f", civ. {civico}"
                     self.selected_localita_name += f" ({tipo})"
 
                     QMessageBox.information(self, "Località Creata", f"Località '{self.selected_localita_name}' registrata con ID: {self.selected_localita_id}.")
@@ -4995,29 +5027,21 @@ class LocalitaSelectionDialog(QDialog):
              else:
                 QMessageBox.warning(self, "Azione Non Valida", "Azione non riconosciuta per il tab corrente.")
 
-    # Aggiungi questo metodo per pulire i campi del tab "Crea Nuova Località"
     def _pulisci_campi_creazione_localita(self):
         self.nome_edit_nuova.clear()
         self.tipo_combo_nuova.setCurrentIndex(0)
-        self.civico_spinbox_nuova.setValue(self.civico_spinbox_nuova.minimum()) # Resetta al "Nessuno"
-    # --- INIZIO METODO MANCANTE/DA RIPRISTINARE ---
     def _salva_nuova_localita_da_tab(self):
         """
         Salva una nuova località dal tab "Crea Nuova Località".
         """
         nome = self.nome_edit_nuova.text().strip()
-        tipo = self.tipo_combo_nuova.currentText()
-        civico_val = self.civico_spinbox_nuova.value()
-
-        civico = None
-        if self.civico_spinbox_nuova.text().strip() != self.civico_spinbox_nuova.specialValueText() and civico_val != 0:
-            civico = civico_val
+        tipo_id = self.tipo_combo_nuova.currentData()
 
         if not nome:
             QMessageBox.warning(self, "Dati Mancanti", "Il nome della località è obbligatorio.")
             self.nome_edit_nuova.setFocus()
             return
-        if not tipo or tipo.strip() == "Seleziona Tipo...": # Se avevi aggiunto un placeholder
+        if tipo_id is None:
             QMessageBox.warning(self, "Dati Mancanti", "Il tipo di località è obbligatorio.")
             self.tipo_combo_nuova.setFocus()
             return
@@ -5026,8 +5050,8 @@ class LocalitaSelectionDialog(QDialog):
             return
 
         try:
-            localita_id_creata = self.db_manager.insert_localita(
-                self.comune_id, nome, tipo, civico
+            localita_id_creata = self.db_manager.create_localita(
+                self.comune_id, nome, tipo_id
             )
 
             if localita_id_creata is not None:
@@ -5048,44 +5072,52 @@ class LocalitaSelectionDialog(QDialog):
             self.logger.critical(f"Errore imprevisto creazione località: {e}", exc_info=True)
             QMessageBox.critical(self, "Errore Imprevisto", f"Si è verificato un errore:\n{e}")
 
-    def _pulisci_campi_creazione_localita(self):
-        self.nome_edit_nuova.clear()
-        self.tipo_combo_nuova.setCurrentIndex(0)
-        self.civico_spinbox_nuova.setValue(self.civico_spinbox_nuova.minimum()) # Resetta al "Nessuno"
-    # --- FINE METODO MANCANTE/DA RIPRISTINARE ---
-        
 
 class DettagliLegamePossessoreDialog(QDialog):
     def __init__(self, nome_possessore_selezionato: str, partita_tipo: str,
-                 titolo_attuale: Optional[str] = None,  # Nuovo
-                 quota_attuale: Optional[str] = None,   # Nuovo
+                 db_manager=None,
+                 titolo_attuale: Optional[str] = None,
+                 quota_attuale: Optional[str] = None,
                  parent=None):
         super().__init__(parent)
+        self.db_manager = db_manager
         self.setWindowTitle(
             f"Dettagli Legame per {nome_possessore_selezionato}")
         self.setMinimumWidth(400)
 
         self.titolo: Optional[str] = None
         self.quota: Optional[str] = None
-        # self.tipo_partita_rel: str = partita_tipo
 
         layout = QFormLayout(self)
 
-        self.titolo_edit = QLineEdit()
-        self.titolo_edit.setPlaceholderText(
-            "Es. proprietà esclusiva, usufrutto")
-        self.titolo_edit.setText(
-            titolo_attuale if titolo_attuale is not None else "proprietà esclusiva")  # Pre-compila
-        layout.addRow("Titolo di Possesso (*):", self.titolo_edit)
+        TITOLI_FALLBACK = [
+            "proprietà esclusiva", "comproprietà", "usufrutto",
+            "nuda proprietà", "enfiteusi", "superficie", "uso", "abitazione", "servitù",
+        ]
+        self.titolo_combo = QComboBox()
+        self.titolo_combo.setEditable(True)
+        titoli_nomi = TITOLI_FALLBACK
+        if self.db_manager is not None:
+            try:
+                titoli_nomi = [t['nome'] for t in self.db_manager.get_titoli_possesso()] or TITOLI_FALLBACK
+            except Exception:
+                pass
+        self.titolo_combo.addItems(titoli_nomi)
+        valore_iniziale = titolo_attuale if titolo_attuale is not None else "proprietà esclusiva"
+        idx = self.titolo_combo.findText(valore_iniziale)
+        if idx >= 0:
+            self.titolo_combo.setCurrentIndex(idx)
+        else:
+            self.titolo_combo.setCurrentText(valore_iniziale)
+        layout.addRow("Titolo di Possesso (*):", self.titolo_combo)
 
         self.quota_edit = QLineEdit()
         self.quota_edit.setPlaceholderText(
             "Es. 1/1, 1/2 (lasciare vuoto se non applicabile)")
         self.quota_edit.setText(
-            quota_attuale if quota_attuale is not None else "")  # Pre-compila
+            quota_attuale if quota_attuale is not None else "")
         layout.addRow("Quota (opzionale):", self.quota_edit)
 
-        # ... (pulsanti OK/Annulla e metodo _accept_details come prima) ...
         buttons_layout = QHBoxLayout()
         self.ok_button = QPushButton(
             QApplication.style().standardIcon(QStyle.SP_DialogOkButton), "OK")
@@ -5098,15 +5130,14 @@ class DettagliLegamePossessoreDialog(QDialog):
         buttons_layout.addWidget(self.cancel_button)
         layout.addRow(buttons_layout)
         self.setLayout(layout)
-        self.titolo_edit.setFocus()
+        self.titolo_combo.setFocus()
 
     def _accept_details(self):
-        # ... (come prima) ...
-        titolo_val = self.titolo_edit.text().strip()
+        titolo_val = self.titolo_combo.currentText().strip()
         if not titolo_val:
             QMessageBox.warning(self, "Dato Mancante",
                                 "Il titolo di possesso è obbligatorio.")
-            self.titolo_edit.setFocus()
+            self.titolo_combo.setFocus()
             return
         self.titolo = titolo_val
         self.quota = self.quota_edit.text().strip() or None
@@ -5115,40 +5146,29 @@ class DettagliLegamePossessoreDialog(QDialog):
     # Metodo statico per l'inserimento (come prima)
 
     @staticmethod
-    def get_details_for_new_legame(nome_possessore: str, tipo_partita_attuale: str, parent=None) -> Optional[Dict[str, Any]]:
-        # Chiamiamo il costruttore senza titolo_attuale e quota_attuale,
-        # così userà i default (None) e quindi il testo placeholder o il default "proprietà esclusiva"
+    def get_details_for_new_legame(nome_possessore: str, tipo_partita_attuale: str, db_manager=None, parent=None) -> Optional[Dict[str, Any]]:
         dialog = DettagliLegamePossessoreDialog(
             nome_possessore_selezionato=nome_possessore,
             partita_tipo=tipo_partita_attuale,
-            # titolo_attuale e quota_attuale non vengono passati,
-            # quindi __init__ userà i loro valori di default (None)
+            db_manager=db_manager,
             parent=parent
         )
         if dialog.exec_() == QDialog.Accepted:
-            return {
-                "titolo": dialog.titolo,
-                "quota": dialog.quota,
-                # "tipo_partita_rel": dialog.tipo_partita_rel # Se lo gestisci
-            }
+            return {"titolo": dialog.titolo, "quota": dialog.quota}
         return None
 
-    # NUOVO Metodo statico per la modifica
     @staticmethod
     def get_details_for_edit_legame(nome_possessore: str, tipo_partita_attuale: str,
                                     titolo_init: str, quota_init: Optional[str],
-                                    parent=None) -> Optional[Dict[str, Any]]:
+                                    db_manager=None, parent=None) -> Optional[Dict[str, Any]]:
         dialog = DettagliLegamePossessoreDialog(nome_possessore, tipo_partita_attuale,
+                                                db_manager=db_manager,
                                                 titolo_attuale=titolo_init,
                                                 quota_attuale=quota_init,
                                                 parent=parent)
-        # Titolo specifico per modifica
         dialog.setWindowTitle(f"Modifica Legame per {nome_possessore}")
         if dialog.exec_() == QDialog.Accepted:
-            return {
-                "titolo": dialog.titolo,
-                "quota": dialog.quota,
-            }
+            return {"titolo": dialog.titolo, "quota": dialog.quota}
         return None
 # In dialogs.py, aggiungi questa nuova classe
 
@@ -5536,7 +5556,7 @@ class EulaDialog(QDialog):
     """Dialogo per la visualizzazione e l'accettazione dell'EULA."""
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Contratto di Licenza (EULA) - Meridiana 1.2")
+        self.setWindowTitle("Contratto di Licenza (EULA) - Meridiana 1.2.1")
         self.setMinimumSize(600, 500)
         self.setModal(True)
 

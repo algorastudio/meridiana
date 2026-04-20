@@ -1,0 +1,154 @@
+# Changelog — Meridiana
+
+## [1.2.1] — 2026-04-20
+
+Versione preparata per la consegna in comodato d'uso all'**Archivio di Stato di Savona**.
+
+### Pulizia del codice
+
+- Eliminato file temporaneo `.wolf69326vHRVvmRzsID.py` (copia obsoleta di `gui_main.py` con password hardcoded)
+- Rimossi 18 marker `INIZIO/FINE METODO MANCANTE/DA RIPRISTINARE` da `dialogs.py` (i metodi erano già presenti e funzionanti)
+- Rimossi 2 metodi `_pulisci_campi_creazione_localita` duplicati nelle classi `LocalitaSelectionDialog`
+- Sostituito `print()` di debug con `logger.error()` in `dialogs.py` (`ModificaImmobileDialog`)
+- Rimosso blocco `__main__` di test con password hardcoded da `catasto_db_manager.py`
+- Rimosso commento residuo `FINE AGGIUNTA METODO MANCANTE` da `gui_main.py`
+- Rimosso blocco di codice morto (53 righe commentate con triple-quote) da `gui_widgets.py`
+
+### Archiviazione logica — soft delete (Area 2)
+
+In un archivio storico i dati non si cancellano mai fisicamente. Implementato sistema di
+archiviazione logica per le quattro entità principali.
+
+**Database** (`sql_scripts/21_soft_delete.sql` — da eseguire su DB esistenti):
+- Aggiunta colonna `archiviato BOOLEAN DEFAULT FALSE` + `data_archiviazione TIMESTAMPTZ` su: `comune`, `partita`, `localita`
+- Aggiunta colonna `data_archiviazione TIMESTAMPTZ` su `possessore` (usa già il campo `attivo`)
+- Stored procedures: `archivia_xxx` e `ripristina_xxx` per tutte e quattro le entità
+- Indici su `archiviato` / `attivo` per performance di ricerca
+
+**db_manager** (`catasto_db_manager.py`):
+- Aggiunti metodi: `archivia_comune`, `archivia_partita`, `archivia_possessore`, `archivia_localita`
+- Query di elenco/ricerca aggiornate con filtro `archiviato = FALSE` / `attivo = TRUE`:
+  `get_all_comuni_details`, `get_elenco_comuni_semplice`, `get_possessori_by_comune`,
+  `search_possessori_by_term_globally`, `get_localita_by_comune`, `search_partite`
+
+**UI** (`dialogs.py`):
+- Pulsante **"Archivia..."** con dialogo di conferma aggiunto in:
+  `ModificaPartitaDialog`, `ModificaPossessoreDialog`, `ModificaComuneDialog`, `ModificaLocalitaDialog`
+
+### Naming CRUD uniforme (Area 3)
+
+- Rinominato `aggiungi_comune` → `create_comune` (16 chiamanti aggiornati)
+- Rinominato `insert_localita` → `create_localita` (5 chiamanti aggiornati)
+- Corretti i return type di `update_partita`, `update_possessore`, `update_localita`: ora restituiscono `bool` invece di `None` (corregge bug nei test)
+
+### Validazione business logic centralizzata (Area 4)
+
+- Aggiunto helper statico `_valida_intervallo_date` in `CatastoDBManager`
+- Controllo `data_soppressione >= data_istituzione` in `create_comune` e `update_comune`
+- Controllo `data_chiusura >= data_impianto` in `create_partita` e `update_partita`
+- L'UI rimane responsabile solo della presentazione (campi vuoti, formato data)
+
+### Test suite completa e bug fix (Area 5)
+
+**Test Suite** (`tests/test_db_manager.py` — 855 linee, 100+ test methods):
+- 20+ classi test per massima copertura
+- CRUD operations: Comune, Possessore, Partita, Localita, TipoLocalita
+- Soft delete: validazione esclusione da ricerche per tutte le entità
+- Validazione: date invertite, campi obbligatori, ID invalidi
+- Import CSV: gestione duplicati, file mancanti, intestazioni errate
+- Ricerca avanzata: search_partite, ricerca_avanzata_immobili_gui, ricerca_avanzata_possessori
+- Legami Partita-Possessore: aggiungi, aggiorna, rimuovi
+- Dashboard: statistiche e views materializzate
+- Exception handling: DBDataError, DBUniqueConstraintError, DBNotFoundError, DBMError
+
+**Fixture migliorate** (`tests/conftest.py`):
+- `tipo_localita_id`: crea/recupera tipo di località
+- `sample_data`: dataset completo con comune, possessore, partita, localita
+- `temp_csv_possessori`: file CSV per test import
+
+**Bug fix — Migrazione tipo_localita (Script 20)**:
+- `sql_scripts/17_funzione_ricerca_immobili.sql`: 
+  - Sostituito `l.tipo` (colonna rimossa) con `LEFT JOIN catasto.tipo_localita tl ON l.tipo_id = tl.id`
+  - Aggiunto `tl.nome AS localita_tipo`
+  - Aggiunti filtri soft delete: `NOT c.archiviato`, `NOT p.archiviato`, `NOT l.archiviato`
+- `catasto_db_manager.py:get_localita_details()`:
+  - Sostituito `loc.tipo` con `LEFT JOIN catasto.tipo_localita tl ON loc.tipo_id = tl.id`
+  - Aggiunto `tl.nome AS tipo`
+- `catasto_db_manager.py:get_immobile_details()`:
+  - Sostituito `l.tipo` con `LEFT JOIN catasto.tipo_localita tl ON l.tipo_id = tl.id`
+  - Aggiunto `tl.nome AS localita_tipo`
+
+### Rimozione campo civico da localita (Area 6)
+
+Il campo `civico INTEGER` nella tabella `localita` è stato rimosso in quanto non utilizzato in
+ricerche o statistiche e incompatibile con valori alfanumerici (es. "11A"). Il numero civico
+va ora incorporato direttamente nel nome della via (es. "Via Roma 11A").
+
+**Database** (`sql_scripts/22_drop_civico_localita.sql` — da eseguire su DB esistenti):
+- Pre-migrazione: i valori numerici di `civico` vengono concatenati a `nome` prima della DROP
+- Vincolo UNIQUE aggiornato: `(comune_id, nome, civico)` → `(comune_id, nome)`
+- `ALTER TABLE catasto.localita DROP COLUMN civico`
+
+**db_manager** (`catasto_db_manager.py`):
+- `create_localita`: rimosso parametro `civico`, firma ora `(comune_id, nome, tipo_id)`
+- Rimosso `civico` da tutte le query SELECT: `get_immobili_by_comune`, `get_elenco_immobili_per_esportazione`,
+  `get_elenco_localita_per_esportazione`, `get_localita_by_comune`, `get_localita_details`,
+  `get_partita_details`, `get_immobile_details`, `search_all_entities_fuzzy`
+- Rimosso blocco `if "civico" in dati_modificati` da `update_localita`
+
+**UI** (`dialogs.py`, `gui_widgets.py`, `custom_widgets.py`, `app_utils.py`):
+- Rimosso QSpinBox civico da `ModificaLocalitaDialog` e tutte le istanze di `LocalitaSelectionDialog`
+- Tabella località ridotta a 3 colonne: ID, Nome, Tipo (rimossa colonna Civico)
+- Rimossi tutti i riferimenti a `immobile.get('civico')` nella visualizzazione delle locality negli immobili
+
+### Bug fix bootstrap e dialog (Area 7)
+
+**Bootstrap DB** (`setup_server.py` / SQL):
+- `15_integration_audit_users.sql`: rimosso corpus di query di test bare che causavano
+  errore `cerca_possessori non esiste` su ogni `setup_server.py` su DB senza dati
+- `04_dati_stress_test.sql`: rimossa colonna `civico` dalle INSERT su `localita` (DROP precedente
+  in script 22 causava eccezione silenziosa e DB rimasto vuoto)
+- `17_funzione_ricerca_immobili.sql`: aggiunto `DROP FUNCTION IF EXISTS` prima di `CREATE OR REPLACE`
+  per consentire l'aggiornamento del RETURNS TABLE su DB già configurati
+
+**Dialog fix** (`dialogs.py`):
+- `ModificaImmobileDialog`: aggiunto `self.logger` mancante nel `__init__`; corretto
+  `get_localita_per_comune` → `get_localita_by_comune` e iterazione su `List[Dict]`
+- `LocalitaSelectionDialog._salva_nuova_localita_da_tab`: `currentText()` → `currentData()`
+  per passare l'ID intero invece della stringa al `create_localita`
+- `PossessoreSelectionDialog`: aggiunto pulsante **"Genera Nome Completo"** nel tab "Crea Nuovo"
+  (mancante rispetto a `ModificaPossessoreDialog`)
+
+### Titolo di possesso — da testo libero a selezione guidata (Area 8)
+
+**Fase A — QComboBox editabile:**
+- `DettagliLegamePossessoreDialog`: sostituito `QLineEdit` con `QComboBox` editabile
+  con lista predefinita (proprietà esclusiva, usufrutto, comproprietà, enfiteusi…)
+
+**Fase B — Tabella DB + menu di manutenzione:**
+- SQL (`23_titoli_possesso.sql`): tabella `titolo_possesso` con 9 valori default
+- `db_manager`: `get_titoli_possesso`, `gestisci_titolo_possesso`, `elimina_titolo_possesso`
+- `gui_widgets`: `GestioneTitoliPossessoWidget` — tabella con Aggiungi / Modifica / Elimina
+- `gui_main`: nuovo tab **"Titoli Possesso"** visibile solo agli admin
+- `DettagliLegamePossessoreDialog`: carica i titoli dalla tabella DB; fallback alla lista
+  statica se `db_manager` non disponibile
+
+### Miglioramenti UI (Area 9)
+
+- Tabella comuni (tab Principale): colonne Data Istituzione e Data Soppressione ridotte al
+  minimo (`ResizeToContents`); Nome Comune e Note si spartiscono lo spazio restante (`Stretch`)
+
+---
+
+## [1.2.0] — 2025-05-18
+
+Versione stabile con pipeline CI/CD completa.
+
+- Pipeline GitHub Actions: test su Ubuntu + PostgreSQL 14, build installer Windows
+- Installer `.exe` generato da PyInstaller + Inno Setup
+- Gestione utenti con bcrypt, sistema di audit log
+- Reportistica: esportazione PDF, XLS, CSV per tutte le entità principali
+- 16 temi grafici, dashboard con statistiche in tempo reale
+- Ricerca fuzzy con indici GIN su PostgreSQL
+- Gestione periodi storici (Regno Sardegna, Regno Italia, Repubblica)
+- Sistema di backup/restore integrato

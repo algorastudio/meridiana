@@ -6,7 +6,7 @@ Interfaccia Grafica per Gestionale Catasto Storico
 =================================================
 Autore: Marco Santoro
 Data: 18/05/2025
-Versione: 1.2 (con integrazione menu esportazioni)
+Versione: 1.2.1
 """
 import sys,bcrypt
 from gui_widgets import UnifiedFuzzySearchWidget
@@ -46,7 +46,7 @@ from gui_widgets import (
     OperazioniPartitaWidget, EsportazioniWidget, ReportisticaWidget, StatisticheWidget,
     GestioneUtentiWidget, AuditLogViewerWidget, BackupWidget, 
     RegistraConsultazioneWidget, WelcomeScreen  , RicercaPartiteWidget,GestionePeriodiStoriciWidget ,
-    GestioneTipiLocalitaWidget , 
+    GestioneTipiLocalitaWidget, GestioneTitoliPossessoWidget,
     DBConfigDialog,InserimentoPartitaWidget)
 from dialogs import CSVImportResultDialog,EulaDialog
 
@@ -132,7 +132,7 @@ class LoginDialog(QDialog):
         # NUOVO attributo per conservare l'UUID
         self.current_session_id_from_dialog: Optional[str] = None
 
-        self.setWindowTitle("Login - Meridiana 1.2")
+        self.setWindowTitle("Login - Meridiana 1.2.1")
         self.setMinimumWidth(350)
         self.setModal(True)
 
@@ -316,7 +316,7 @@ class CatastoMainWindow(QMainWindow):
         self.gestione_periodi_storici_widget_ref: Optional[GestionePeriodiStoriciWidget] = None
         self.gestione_tipi_localita_widget_ref: Optional[GestioneTipiLocalitaWidget] = None
         
-        self.setWindowTitle("Meridiana 1.2 - Gestionale Catasto Storico")
+        self.setWindowTitle("Meridiana 1.2.1 - Gestionale Catasto Storico")
         self.setMinimumSize(1280, 720)
         self.central_widget = QWidget()
         self.main_layout = QVBoxLayout(self.central_widget)
@@ -570,7 +570,6 @@ class CatastoMainWindow(QMainWindow):
         dialog = EulaDialog(self)
         dialog.exec_()
 
-    # --- FINE AGGIUNTA METODO MANCANTE -
     def create_status_bar_content(self):
         status_frame = QFrame()
         status_frame.setFrameShape(QFrame.StyledPanel)
@@ -681,6 +680,9 @@ class CatastoMainWindow(QMainWindow):
             self.gestione_tipi_localita_widget = GestioneTipiLocalitaWidget(self.db_manager)
             self.inserimento_sub_tabs.addTab(self.gestione_tipi_localita_widget, "Tipi Località")
 
+            self.gestione_titoli_possesso_widget = GestioneTitoliPossessoWidget(self.db_manager)
+            self.inserimento_sub_tabs.addTab(self.gestione_titoli_possesso_widget, "Titoli Possesso")
+
             self.gestione_periodi_widget = GestionePeriodiStoriciWidget(self.db_manager)
             self.inserimento_sub_tabs.addTab(self.gestione_periodi_widget, "Periodi")
 
@@ -696,6 +698,7 @@ class CatastoMainWindow(QMainWindow):
         
         if self.logged_in_user_info and self.logged_in_user_info.get('ruolo') == 'admin':
             self.inserimento_sub_tabs.setTabToolTip(tab_idx, "Gestione Tipi Località\nGestisci le tipologie di località (Via, Piazza, ecc.)"); tab_idx += 1
+            self.inserimento_sub_tabs.setTabToolTip(tab_idx, "Gestione Titoli di Possesso\nAggiungi, modifica o rimuovi i titoli giuridici (Proprietà, Usufrutto, ecc.)"); tab_idx += 1
             self.inserimento_sub_tabs.setTabToolTip(tab_idx, "Gestione Periodi Storici\nDefinisci i periodi storici di riferimento")
 
         layout_inserimento.addWidget(self.inserimento_sub_tabs)

@@ -38,7 +38,7 @@ class TestDatabaseGUIIntegration:
         original_count = widget.table.rowCount() if hasattr(widget, 'table') else 0
         
         # Simula aggiunta
-        comune_id = db_manager.aggiungi_comune("Test Integration", "TI", "Test")
+        comune_id = db_manager.create_comune("Test Integration", "TI", "Test")
         widget._load_comuni()  # Ricarica lista
         
         # Verifica aggiunta
@@ -362,7 +362,7 @@ class TestConcurrentOperations:
         import queue
         
         # Crea comune di test
-        comune_id = db_manager.aggiungi_comune("Concurrent Test", "CT", "Test")
+        comune_id = db_manager.create_comune("Concurrent Test", "CT", "Test")
         
         # Crea possessore
         possessore_id = db_manager.create_possessore(
@@ -412,7 +412,7 @@ class TestConcurrentOperations:
     
     def test_transaction_isolation(self, db_manager):
         """Test isolamento transazioni"""
-        comune_id = db_manager.aggiungi_comune("Isolation Test", "IT", "Test")
+        comune_id = db_manager.create_comune("Isolation Test", "IT", "Test")
         
         # Transazione 1: inserisce possessore
         db_manager.begin()
@@ -491,7 +491,7 @@ class TestPerformanceIntegration:
         import time
         
         # Crea comune
-        comune_id = clean_db.aggiungi_comune("Performance Test", "PT", "Test")
+        comune_id = clean_db.create_comune("Performance Test", "PT", "Test")
         
         # Test inserimento massivo con transazione
         start_time = time.time()
@@ -530,7 +530,7 @@ class TestPerformanceIntegration:
     def test_gui_responsiveness_with_large_data(self, qapp, clean_db):
         """Test responsività GUI con molti dati"""
         # Crea dataset di test
-        comune_id = clean_db.aggiungi_comune("GUI Performance", "GP", "Test")
+        comune_id = clean_db.create_comune("GUI Performance", "GP", "Test")
         
         # Aggiungi 100 possessori
         for i in range(100):

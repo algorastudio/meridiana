@@ -69,8 +69,6 @@ class ImmobiliTableWidget(QTableWidget):
             localita_text = ""
             if 'localita_nome' in immobile:
                 localita_text = immobile['localita_nome']
-                if 'civico' in immobile and immobile['civico'] is not None:
-                    localita_text += f", {immobile['civico']}"
                 if 'localita_tipo' in immobile:
                     localita_text += f" ({immobile['localita_tipo']})"
 

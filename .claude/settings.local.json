@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(c:Userssaintmeridiana.venvScriptspython.exe --version)",
+      "Bash(\"/c/Users/saint/meridiana/.venv/Scripts/python.exe\" --version)",
+      "Bash(/c/Users/saint/meridiana/.venv/Scripts/pip.exe index:*)",
+      "Bash(\"/c/Users/saint/meridiana/.venv/Scripts/pip.exe\" install:*)"
+    ]
+  }
+}

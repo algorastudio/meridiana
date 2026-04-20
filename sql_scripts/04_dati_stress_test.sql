@@ -107,14 +107,14 @@ BEGIN
              IF v_localita_counter % 2 = 0 THEN
                 -- Inserisce una Piazza
                 v_nome_localita := 'Libertà ' || v_localita_counter;
-                INSERT INTO localita (comune_id, nome, tipologia_stradale, tipo_id, civico)
-                VALUES (v_comune_id, v_nome_localita, 'Piazza', v_tipo_piazza_id, floor(random()*50 + 1)::text)
+                INSERT INTO localita (comune_id, nome, tipologia_stradale, tipo_id)
+                VALUES (v_comune_id, v_nome_localita, 'Piazza', v_tipo_piazza_id)
                 RETURNING id INTO v_localita_id;
              ELSE
                 -- Inserisce una Via
                 v_nome_localita := 'Roma ' || v_localita_counter;
-                INSERT INTO localita (comune_id, nome, tipologia_stradale, tipo_id, civico)
-                VALUES (v_comune_id, v_nome_localita, 'Via', v_tipo_via_id, floor(random()*100 + 1)::text)
+                INSERT INTO localita (comune_id, nome, tipologia_stradale, tipo_id)
+                VALUES (v_comune_id, v_nome_localita, 'Via', v_tipo_via_id)
                 RETURNING id INTO v_localita_id;
              END IF;
 

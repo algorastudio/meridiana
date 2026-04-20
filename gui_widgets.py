@@ -108,7 +108,14 @@ class ElencoComuniWidget(LazyLoadedWidget):
         self.comuni_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.comuni_table.setSelectionMode(QTableWidget.SingleSelection) # Importante per menu contestuale su una riga
         self.comuni_table.setAlternatingRowColors(True)
-        self.comuni_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        header = self.comuni_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)  # ID
+        header.setSectionResizeMode(1, QHeaderView.Stretch)            # Nome Comune
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Cod. Catastale
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Provincia
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # Data Istituzione
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # Data Soppressione
+        header.setSectionResizeMode(6, QHeaderView.Stretch)            # Note
         self.comuni_table.setSortingEnabled(True)
         # self.comuni_table.itemDoubleClicked.connect(self.mostra_partite_del_comune) # Il doppio click può rimanere
 
@@ -920,8 +927,6 @@ class RicercaAvanzataImmobiliWidget(QWidget):
                         row_idx, col, QTableWidgetItem(immobile.get('comune_nome', '')))
                     col += 1
                     localita_display = f"{immobile.get('localita_nome', '')}"
-                    if immobile.get('civico'):
-                        localita_display += f", {immobile.get('civico')}"
                     if immobile.get('localita_tipo'):
                         localita_display += f" ({immobile.get('localita_tipo')})"
                     self.risultati_immobili_table.setItem(
@@ -1070,7 +1075,7 @@ class InserimentoComuneWidget(LazyLoadedWidget): # Eredita da LazyLoadedWidget
         username_per_log = self.utente_attuale_info.get('username', 'utente_sconosciuto') if self.utente_attuale_info else 'utente_sconosciuto'
         
         try:
-            comune_id = self.db_manager.aggiungi_comune(
+            comune_id = self.db_manager.create_comune(
                 nome_comune=nome_comune, provincia=provincia, regione=regione,
                 periodo_id=periodo_id_val, codice_catastale=codice_catastale,
                 data_istituzione=data_ist, data_soppressione=data_sopp, # Passa i valori corretti (o None)
@@ -1196,9 +1201,104 @@ class GestioneTipiLocalitaWidget(LazyLoadedWidget):
             except DBMError as e:
                 QMessageBox.critical(self, "Errore Eliminazione", str(e))
 
-# In gui_widgets.py, SOSTITUISCI l'intera classe GestionePeriodiStoriciWidget
+class GestioneTitoliPossessoWidget(LazyLoadedWidget):
+    def __init__(self, db_manager: 'CatastoDBManager', parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self._initUI()
 
-# Assicurati che queste importazioni siano presenti all'inizio del file
+    def _initUI(self):
+        layout = QVBoxLayout(self)
+        group = QGroupBox("Gestione Titoli di Possesso (Proprietà, Usufrutto, Enfiteusi, etc.)")
+        group_layout = QHBoxLayout(group)
+
+        self.table = QTableWidget()
+        self.table.setColumnCount(3)
+        self.table.setHorizontalHeaderLabels(["ID", "Titolo", "Descrizione"])
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        group_layout.addWidget(self.table, 2)
+
+        button_layout = QVBoxLayout()
+        btn_add = QPushButton("Aggiungi...")
+        btn_add.clicked.connect(self._add_or_edit_item)
+        btn_edit = QPushButton("Modifica...")
+        btn_edit.clicked.connect(lambda: self._add_or_edit_item(edit_mode=True))
+        btn_del = QPushButton("Elimina")
+        btn_del.clicked.connect(self._delete_item)
+        btn_refresh = QPushButton(QApplication.style().standardIcon(QStyle.SP_BrowserReload), " Aggiorna")
+        btn_refresh.clicked.connect(self.load_data)
+
+        button_layout.addWidget(btn_add)
+        button_layout.addWidget(btn_edit)
+        button_layout.addWidget(btn_del)
+        button_layout.addSpacing(20)
+        button_layout.addWidget(btn_refresh)
+        button_layout.addStretch()
+        group_layout.addLayout(button_layout, 1)
+
+        layout.addWidget(group)
+        self.setLayout(layout)
+
+    def load_data(self):
+        self.table.setRowCount(0)
+        try:
+            titoli = self.db_manager.get_titoli_possesso()
+            for t in titoli:
+                row = self.table.rowCount()
+                self.table.insertRow(row)
+                self.table.setItem(row, 0, QTableWidgetItem(str(t['id'])))
+                self.table.setItem(row, 1, QTableWidgetItem(t['nome']))
+                self.table.setItem(row, 2, QTableWidgetItem(t.get('descrizione', '') or ''))
+            self.table.resizeColumnToContents(0)
+        except DBMError as e:
+            QMessageBox.critical(self, "Errore Caricamento", str(e))
+
+    def _load_data_on_first_show(self):
+        self.load_data()
+
+    def _add_or_edit_item(self, edit_mode=False):
+        titolo_id, old_nome, old_desc = None, "", ""
+        if edit_mode:
+            selected = self.table.selectedItems()
+            if not selected:
+                QMessageBox.warning(self, "Selezione Mancante", "Seleziona un titolo da modificare.")
+                return
+            row = selected[0].row()
+            titolo_id = int(self.table.item(row, 0).text())
+            old_nome = self.table.item(row, 1).text()
+            old_desc = self.table.item(row, 2).text()
+
+        nome, ok = QInputDialog.getText(self, "Titolo di Possesso", "Titolo:", text=old_nome)
+        if ok and nome:
+            desc, ok2 = QInputDialog.getText(self, "Titolo di Possesso", "Descrizione (opzionale):", text=old_desc)
+            if ok2:
+                try:
+                    self.db_manager.gestisci_titolo_possesso(titolo_id, nome, desc)
+                    self.load_data()
+                except (DBMError, DBDataError, DBUniqueConstraintError) as e:
+                    QMessageBox.critical(self, "Errore", str(e))
+
+    def _delete_item(self):
+        selected = self.table.selectedItems()
+        if not selected:
+            QMessageBox.warning(self, "Selezione Mancante", "Seleziona un titolo da eliminare.")
+            return
+        row = selected[0].row()
+        titolo_id = int(self.table.item(row, 0).text())
+        nome = self.table.item(row, 1).text()
+        reply = QMessageBox.question(self, "Conferma Eliminazione",
+                                     f"Eliminare il titolo '{nome}'?",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            try:
+                self.db_manager.elimina_titolo_possesso(titolo_id)
+                self.load_data()
+            except DBMError as e:
+                QMessageBox.critical(self, "Errore Eliminazione", str(e))
+
 
 class GestionePeriodiStoriciWidget(LazyLoadedWidget):
     def __init__(self, db_manager: 'CatastoDBManager', parent=None):
@@ -1548,25 +1648,18 @@ class InserimentoLocalitaWidget(QWidget):
         self.tipo_combo.setEnabled(False)
         form_layout.addWidget(tipo_label, 2, 0)
         form_layout.addWidget(self.tipo_combo, 2, 1)
-        civico_label = QLabel("Civico (opzionale):")
-        self.civico_edit = QSpinBox()
-        self.civico_edit.setMinimum(0)
-        self.civico_edit.setMaximum(9999)
-        self.civico_edit.setSpecialValueText("Nessuno")
-        form_layout.addWidget(civico_label, 3, 0)
-        form_layout.addWidget(self.civico_edit, 3, 1)
         form_group.setLayout(form_layout)
         layout.addWidget(form_group)
         insert_button = QPushButton("Inserisci Località")
-        insert_button.clicked.connect(self.insert_localita)
+        insert_button.clicked.connect(self.create_localita)
         layout.addWidget(insert_button)
         summary_group = QGroupBox("Località nel Comune Selezionato")
         summary_layout = QVBoxLayout(summary_group)
         self.refresh_button = QPushButton("Aggiorna Lista")
         self.refresh_button.clicked.connect(self.refresh_localita)
         self.localita_table = QTableWidget()
-        self.localita_table.setColumnCount(4)
-        self.localita_table.setHorizontalHeaderLabels(["ID", "Nome", "Tipo", "Civico"])
+        self.localita_table.setColumnCount(3)
+        self.localita_table.setHorizontalHeaderLabels(["ID", "Nome", "Tipo"])
         self.localita_table.setAlternatingRowColors(True)
         self.localita_table.horizontalHeader().setStretchLastSection(True)
         summary_layout.addWidget(self.refresh_button)
@@ -1601,28 +1694,25 @@ class InserimentoLocalitaWidget(QWidget):
             self._load_tipi_localita() # Carica i tipi dopo aver selezionato il comune
             self.refresh_localita()
 
-    def insert_localita(self):
+    def create_localita(self):
         if not self.comune_id:
             QMessageBox.warning(self, "Errore", "Seleziona un comune.")
             return
 
         nome = self.nome_edit.text().strip()
-        tipo_id = self.tipo_combo.currentData() # <-- MODIFICA QUI: Prende l'ID
-        civico = self.civico_edit.value() if self.civico_edit.value() > 0 else None
+        tipo_id = self.tipo_combo.currentData()
 
         if not nome:
             QMessageBox.warning(self, "Errore", "Il nome della località è obbligatorio.")
             return
-        if tipo_id is None: # <-- MODIFICA QUI: Controlla che un tipo sia selezionato
+        if tipo_id is None:
             QMessageBox.warning(self, "Errore", "Selezionare una tipologia valida.")
             return
 
         try:
-            # Passa tipo_id invece della stringa
-            localita_id = self.db_manager.insert_localita(self.comune_id, nome, tipo_id, civico)
+            localita_id = self.db_manager.create_localita(self.comune_id, nome, tipo_id)
             QMessageBox.information(self, "Successo", f"Località '{nome}' inserita con ID: {localita_id}")
             self.nome_edit.clear()
-            self.civico_edit.setValue(0)
             self.refresh_localita()
         except (DBMError, DBDataError, DBUniqueConstraintError) as e:
             QMessageBox.critical(self, "Errore Inserimento", str(e))
@@ -2191,60 +2281,7 @@ class RegistrazioneProprietaWidget(LazyLoadedWidget):
             self.logger.critical(f"Errore imprevisto registrazione proprietà: {e_gen}", exc_info=True)
             QMessageBox.critical(self, "Errore Imprevisto", f"Errore: {type(e_gen).__name__}: {e_gen}")
         self.logger.info("Registrazione proprietà completata.")
-    """ 
-    def add_possessore(self):
-        
-        if not self.comune_id:
-            QMessageBox.warning(self, "Comune Mancante", "Selezionare un comune per la partita prima di aggiungere un possessore.")
-            return
 
-        # --- MODIFICA CHIAVE QUI ---
-        # Passiamo 'None' come comune_id per indicare al dialogo di non filtrare
-        # e permettere la selezione/creazione da qualsiasi comune.
-        dialog_sel_poss = PossessoreSelectionDialog(self.db_manager, comune_id=None, parent=self)
-        # --- FINE MODIFICA ---
-
-        if dialog_sel_poss.exec() == QDialog.Accepted and dialog_sel_poss.selected_possessore:
-            selected_possessore_info = dialog_sel_poss.selected_possessore
-        
-        # 2. Dialogo per chiedere i dettagli del LEGAME (Titolo, Quota)
-        # Usiamo il metodo statico che abbiamo già preparato
-        dettagli_legame = DettagliLegamePossessoreDialog.get_details_for_new_legame(
-            nome_possessore=selected_possessore_info.get('nome_completo', 'N/D'),
-            tipo_partita_attuale='principale', # Per una nuova proprietà, è 'principale'
-            parent=self
-        )
-
-        if not dettagli_legame:
-            self.logger.info("Definizione dettagli del legame annullata.")
-            return
-
-        # 3. Combina le informazioni e aggiungile alla lista dati
-        dati_completi_possessore = {
-            "id": selected_possessore_info.get('id'),
-            "nome_completo": selected_possessore_info.get('nome_completo'),
-            "titolo": dettagli_legame.get('titolo'), # Obbligatorio
-            "quota": dettagli_legame.get('quota')   # Opzionale
-        }
-        
-        self.possessori_data.append(dati_completi_possessore)
-        self.update_possessori_table()
-
-    
-
-    
-
-    def add_immobile(self):
-       
-        dialog = ImmobileDialog(self.db_manager, self.comune_id, self)
-        result = dialog.exec_()
-
-        if result == QDialog.Accepted and dialog.immobile_data:
-            self.immobili_data.append(dialog.immobile_data)
-            self.update_immobili_table()
-
-
-    """
 
     def _pulisci_form_registrazione(self):
        
@@ -2983,12 +3020,9 @@ class OperazioniPartitaWidget(QWidget):
 
                 loc_nome = immobile.get('localita_nome', '')
                 loc_tipo = immobile.get('localita_tipo', '')
-                loc_civico = immobile.get('civico', '')
                 loc_text = loc_nome
                 if loc_tipo:
                     loc_text += f" ({loc_tipo})"
-                if loc_civico:  # Civico potrebbe essere 0 o stringa vuota se non presente
-                    loc_text += f", civ. {loc_civico}"
                 table.setItem(row, col, QTableWidgetItem(loc_text.strip()))
                 col += 1
 
@@ -3081,8 +3115,7 @@ class OperazioniPartitaWidget(QWidget):
                 nat_i = QTableWidgetItem(immobile.get('natura', 'N/D'))
                 nat_i.setFlags(nat_i.flags() & ~Qt.ItemIsEditable)
                 table.setItem(row, 2, nat_i)
-                loc_t = f"{immobile.get('localita_nome', '')} {immobile.get('civico', '')}".strip(
-                )
+                loc_t = immobile.get('localita_nome', '')
                 loc_i = QTableWidgetItem(loc_t)
                 loc_i.setFlags(loc_i.flags() & ~Qt.ItemIsEditable)
                 table.setItem(row, 3, loc_i)
@@ -3420,7 +3453,7 @@ class EsportazioniWidget(LazyLoadedWidget):
             "localita_nome": "Località", "numero_partita": "Numero Partita", "comune_nome": "Comune"
         },
         "Elenco Località": {
-            "id": "ID Località", "nome": "Nome", "tipo": "Tipo", "civico": "Civico", "comune_nome": "Comune"
+            "id": "ID Località", "nome": "Nome", "tipo": "Tipo", "comune_nome": "Comune"
         },
         "Elenco Variazioni": {
             "variazione_id": "ID Variazione", "tipo_variazione": "Tipo Variazione", "data_variazione": "Data",
@@ -6021,8 +6054,7 @@ class UnifiedFuzzySearchWidget(QWidget):
         self._populate_table(self.localita_table, results_by_type.get('localita', []),
             lambda l: [
                 l.get('nome', ''),
-                l.get('tipo', '') or '',      # Aggiunto
-                l.get('civico', '') or '',    # Aggiunto
+                l.get('tipo', '') or '',
                 l.get('comune_nome', ''),
                 l.get('num_immobili', 0),
                 f"{l.get('similarity_score', 0):.3f}"
@@ -6492,7 +6524,7 @@ class DashboardWidget(QWidget):
 
         # 1. Intestazione
         nome_utente = self.current_user_info.get('nome_completo', 'Utente') if self.current_user_info else 'Utente'
-        header_label = QLabel(f"<h2>Benvenuto in Meridiana 1.2, {nome_utente}</h2>")
+        header_label = QLabel(f"<h2>Benvenuto in Meridiana 1.2.1, {nome_utente}</h2>")
         header_label.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(header_label)
 
@@ -6621,7 +6653,7 @@ class WelcomeScreen(QDialog):
     def __init__(self, parent=None, logo_path: str = None, help_url: str = None):
         super().__init__(parent)
         self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
-        self.setWindowTitle("Benvenuto - Meridiana 1.2")
+        self.setWindowTitle("Benvenuto - Meridiana 1.2.1")
         self.setModal(True)
         self.setFixedSize(1024, 768)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
@@ -6655,7 +6687,7 @@ class WelcomeScreen(QDialog):
         main_layout.addLayout(logo_layout)
 
         # Titolo e Sottotitolo
-        title_label = QLabel("Meridiana 1.2"); title_label.setFont(QFont("Segoe UI", 28, QFont.Bold)); title_label.setAlignment(Qt.AlignCenter)
+        title_label = QLabel("Meridiana 1.2.1"); title_label.setFont(QFont("Segoe UI", 28, QFont.Bold)); title_label.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(title_label)
         
         subtitle_label = QLabel("Gestionale Catasto Storico - Archivio di Stato di Savona"); subtitle_label.setFont(QFont("Segoe UI", 14)); subtitle_label.setAlignment(Qt.AlignCenter)

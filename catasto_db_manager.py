@@ -397,12 +397,20 @@ class CatastoDBManager:
  # All'interno della classe CatastoDBManager in catasto_db_manager.py
 # Assicurati che le importazioni e le definizioni delle eccezioni siano presenti.
 # import datetime
-# from typing import Optional, Dict, Any, List 
-# from datetime import date # Già importato se datetime è importato
+    # ------------------------------------------------------------------
+    # HELPER DI VALIDAZIONE (business logic centralizzata)
+    # ------------------------------------------------------------------
 
-    # In catasto_db_manager.py, SOSTITUISCI il metodo aggiungi_comune con questo:
+    @staticmethod
+    def _valida_intervallo_date(data_inizio: Optional[date], data_fine: Optional[date],
+                                label_inizio: str, label_fine: str) -> None:
+        """Solleva DBDataError se data_fine è precedente a data_inizio."""
+        if data_inizio and data_fine and data_fine < data_inizio:
+            raise DBDataError(
+                f"{label_fine} ({data_fine}) non può essere precedente a {label_inizio} ({data_inizio})."
+            )
 
-    def aggiungi_comune(self,
+    def create_comune(self,
                         nome_comune: str,
                         provincia: str,
                         regione: str,
@@ -414,13 +422,13 @@ class CatastoDBManager:
                         utente: Optional[str] = None
                        ) -> int:
         
-        # Validazione base dei campi obbligatori
         if not nome_comune or not provincia or not regione:
             raise DBDataError("Nome, Provincia e Regione sono campi obbligatori.")
-        
-        # --- Query aggiornata per includere i nuovi campi opzionali ---
+        self._valida_intervallo_date(data_istituzione, data_soppressione,
+                                     "Data Istituzione", "Data Soppressione")
+
         query = f"""
-            INSERT INTO {self.schema}.comune 
+            INSERT INTO {self.schema}.comune
                 (nome, provincia, regione, periodo_id, codice_catastale, data_istituzione, data_soppressione, note)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id;
@@ -439,7 +447,7 @@ class CatastoDBManager:
         try:
             with self._get_connection() as conn:
                 with conn.cursor() as cur:
-                    self.logger.info(f"Esecuzione aggiungi_comune per: {nome_comune.strip()}")
+                    self.logger.info(f"Esecuzione create_comune per: {nome_comune.strip()}")
                     cur.execute(query, params)
                     result = cur.fetchone()
                     if result and result[0] is not None:
@@ -454,7 +462,7 @@ class CatastoDBManager:
             raise DBUniqueConstraintError(f"Impossibile aggiungere il comune: il nome '{nome_comune}' esiste già.", details=str(e)) from e
         
         except Exception as e:
-            self.logger.error(f"Errore generico in aggiungi_comune: {e}", exc_info=True)
+            self.logger.error(f"Errore generico in create_comune: {e}", exc_info=True)
             raise DBMError(f"Errore database durante l'aggiunta del comune: {e}") from e
     def registra_comune_nel_db(self, nome: str, provincia: str, regione: str) -> Optional[int]:
             comune_id: Optional[int] = None
@@ -592,7 +600,7 @@ class CatastoDBManager:
                 note,
                 data_creazione, 
                 data_modifica
-            FROM catasto.comune ORDER BY nome;
+            FROM catasto.comune WHERE archiviato = FALSE ORDER BY nome;
         """
         # --- FINE QUERY AGGIORNATA ---
 
@@ -667,7 +675,58 @@ class CatastoDBManager:
         except Exception as e:
             self.logger.error(f"Errore in elimina_tipo_localita: {e}", exc_info=True)
             raise DBMError("Eliminazione della tipologia fallita.") from e
-    # In catasto_db_manager.py, aggiungi questo nuovo metodo
+
+    def get_titoli_possesso(self) -> List[Dict[str, Any]]:
+        """Recupera tutti i titoli di possesso disponibili."""
+        query = f"SELECT id, nome, descrizione FROM {self.schema}.titolo_possesso ORDER BY nome;"
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                    cur.execute(query)
+                    return [dict(row) for row in cur.fetchall()]
+        except Exception as e:
+            self.logger.error(f"Errore nel recuperare i titoli di possesso: {e}", exc_info=True)
+            raise DBMError("Impossibile recuperare i titoli di possesso.") from e
+
+    def gestisci_titolo_possesso(self, titolo_id: Optional[int], nome: str, descrizione: Optional[str] = None) -> int:
+        """Crea o aggiorna un titolo di possesso."""
+        if not nome or not nome.strip():
+            raise DBDataError("Il nome del titolo di possesso non può essere vuoto.")
+        nome = nome.strip()
+        descrizione = descrizione.strip() if descrizione else None
+        if titolo_id:
+            query = f"UPDATE {self.schema}.titolo_possesso SET nome = %s, descrizione = %s WHERE id = %s RETURNING id;"
+            params = (nome, descrizione, titolo_id)
+        else:
+            query = f"INSERT INTO {self.schema}.titolo_possesso (nome, descrizione) VALUES (%s, %s) ON CONFLICT (nome) DO NOTHING RETURNING id;"
+            params = (nome, descrizione)
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query, params)
+                    result = cur.fetchone()
+                    if result:
+                        return result[0]
+                    raise DBUniqueConstraintError(f"Un titolo con nome '{nome}' esiste già.")
+        except psycopg2.errors.UniqueViolation:
+            raise DBUniqueConstraintError(f"Un titolo con nome '{nome}' esiste già.") from None
+        except (DBDataError, DBUniqueConstraintError):
+            raise
+        except Exception as e:
+            self.logger.error(f"Errore in gestisci_titolo_possesso: {e}", exc_info=True)
+            raise DBMError("Operazione sul titolo di possesso fallita.") from e
+
+    def elimina_titolo_possesso(self, titolo_id: int) -> bool:
+        """Elimina un titolo di possesso."""
+        query = f"DELETE FROM {self.schema}.titolo_possesso WHERE id = %s;"
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query, (titolo_id,))
+                    return cur.rowcount > 0
+        except Exception as e:
+            self.logger.error(f"Errore in elimina_titolo_possesso: {e}", exc_info=True)
+            raise DBMError("Eliminazione del titolo di possesso fallita.") from e
 
     # In catasto_db_manager.py, SOSTITUISCI il metodo get_immobili_by_comune
 
@@ -681,10 +740,9 @@ class CatastoDBManager:
             SELECT 
                 i.id, 
                 i.natura, 
-                l.nome AS localita_nome, 
-                l.civico, 
+                l.nome AS localita_nome,
                 tl.nome as tipo_localita,
-                l.id as localita_id -- Aggiungi questa colonna fondamentale
+                l.id as localita_id
             FROM {self.schema}.immobile i
             JOIN {self.schema}.partita p ON i.partita_id = p.id
             JOIN {self.schema}.localita l ON i.localita_id = l.id
@@ -706,7 +764,7 @@ class CatastoDBManager:
         """
         Recupera un elenco di tutti i comuni (ID e nome) per popolare una scelta utente.
         """
-        query = f"SELECT id, nome FROM {self.schema}.comune ORDER BY nome"
+        query = f"SELECT id, nome FROM {self.schema}.comune WHERE archiviato = FALSE ORDER BY nome"
         try:
             with self._get_connection() as conn:
                 # Qui non usiamo DictCursor perché la firma del metodo prevede una lista di tuple
@@ -929,9 +987,9 @@ class CatastoDBManager:
         """
         Crea una nuova, singola partita nel database e restituisce il suo ID.
         """
-        # Validazione base
         if not all([comune_id, numero_partita, tipo, stato, data_impianto]):
             raise DBDataError("Comune, Numero Partita, Tipo, Stato e Data Impianto sono obbligatori.")
+        self._valida_intervallo_date(data_impianto, data_chiusura, "Data Impianto", "Data Chiusura")
 
         query = f"""
             INSERT INTO {self.schema}.partita
@@ -1093,7 +1151,7 @@ class CatastoDBManager:
             FROM {self.schema}.possessore p
             JOIN {self.schema}.comune c ON p.comune_id = c.id
             LEFT JOIN {self.schema}.partita_possessore pp ON p.id = pp.possessore_id
-            WHERE p.comune_id = %s
+            WHERE p.comune_id = %s AND p.attivo = TRUE
         """
 
         where_clauses = []
@@ -1149,8 +1207,8 @@ class CatastoDBManager:
         query = f"""
             SELECT 
                 i.id AS id_immobile, i.natura, i.classificazione, i.consistenza,
-                i.numero_piani, i.numero_vani, l.nome AS localita_nome, 
-                tl.nome AS localita_tipo, l.civico, p.numero_partita, 
+                i.numero_piani, i.numero_vani, l.nome AS localita_nome,
+                tl.nome AS localita_tipo, p.numero_partita,
                 p.suffisso_partita, c.nome AS comune_nome
             FROM {self.schema}.immobile i
             JOIN {self.schema}.partita p ON i.partita_id = p.id
@@ -1174,7 +1232,7 @@ class CatastoDBManager:
     def get_elenco_localita_per_esportazione(self, comune_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """Recupera un elenco completo di località per l'esportazione."""
         query = f"""
-            SELECT l.id, l.nome, tl.nome AS tipo, l.civico, c.nome AS comune_nome
+            SELECT l.id, l.nome, tl.nome AS tipo, c.nome AS comune_nome
             FROM {self.schema}.localita l
             JOIN {self.schema}.comune c ON l.comune_id = c.id
             LEFT JOIN {self.schema}.tipo_localita tl ON l.tipo_id = tl.id
@@ -1201,14 +1259,12 @@ class CatastoDBManager:
         query_base = f"""
             SELECT 
                 loc.id, 
-                loc.nome, 
-                tl.nome AS tipo,  -- Selezioniamo il nome dalla tabella tipo_localita
-                loc.civico 
+                loc.nome,
+                tl.nome AS tipo
             FROM {self.schema}.localita loc
             LEFT JOIN {self.schema}.tipo_localita tl ON loc.tipo_id = tl.id
-            WHERE loc.comune_id = %s
+            WHERE loc.comune_id = %s AND loc.archiviato = FALSE
         """
-        # --- FINE CORREZIONE ---
 
         params: List[Union[int, str]] = [comune_id]
 
@@ -1216,7 +1272,7 @@ class CatastoDBManager:
             query_base += " AND loc.nome ILIKE %s"
             params.append(f"%{filter_text}%")
 
-        query = query_base + " ORDER BY tl.nome, loc.nome, loc.civico;"
+        query = query_base + " ORDER BY tl.nome, loc.nome;"
 
         try:
             with self._get_connection() as conn:
@@ -1240,17 +1296,14 @@ class CatastoDBManager:
         """
         
         params: List[Union[str, int]] = []
-        where_clauses = []
+        where_clauses = ["p.attivo = TRUE"]
 
         if search_term and search_term.strip():
             like_term = f"%{search_term.strip()}%"
             where_clauses.append("(p.nome_completo ILIKE %s OR p.cognome_nome ILIKE %s OR p.paternita ILIKE %s)")
             params.extend([like_term, like_term, like_term])
-        
-        query = query_base
-        if where_clauses:
-            query += " WHERE " + " AND ".join(where_clauses)
-        
+
+        query = query_base + " WHERE " + " AND ".join(where_clauses)
         query += " ORDER BY p.nome_completo LIMIT %s;"
         params.append(limit)
         
@@ -1301,31 +1354,28 @@ class CatastoDBManager:
             self.logger.error(f"Errore DB durante il recupero dei possessori per la partita ID {partita_id}: {e}", exc_info=True)
             # In caso di errore, restituisce una lista vuota per stabilità
             return []
-    def insert_localita(self, comune_id: int, nome: str, tipo_id: int, civico: Optional[int] = None) -> int:
+    def create_localita(self, comune_id: int, nome: str, tipo_id: int) -> int:
         """
         Inserisce una nuova località usando tipo_id (FK) e gestisce i conflitti.
+        Il civico, se presente, va già incluso nel nome (es. "Via Roma 11A").
         """
         if not all([isinstance(comune_id, int), comune_id > 0, isinstance(nome, str), nome.strip(), isinstance(tipo_id, int), tipo_id > 0]):
             raise DBDataError("Parametri per l'inserimento della località non validi.")
 
-        actual_civico = civico if civico is not None and civico > 0 else None
-
-        # La colonna ora è 'tipo_id'
-        query_insert = f"INSERT INTO {self.schema}.localita (comune_id, nome, tipo_id, civico) VALUES (%s, %s, %s, %s) ON CONFLICT (comune_id, nome, civico) DO NOTHING RETURNING id;"
-        # Anche la query di select deve usare tipo_id, ma per ora non è strettamente necessaria se il recupero avviene dopo
-        query_select = f"SELECT id FROM {self.schema}.localita WHERE comune_id = %s AND nome = %s AND tipo_id = %s AND ((civico IS NULL AND %s IS NULL) OR (civico = %s));"
+        query_insert = f"INSERT INTO {self.schema}.localita (comune_id, nome, tipo_id) VALUES (%s, %s, %s) ON CONFLICT (comune_id, nome) DO NOTHING RETURNING id;"
+        query_select = f"SELECT id FROM {self.schema}.localita WHERE comune_id = %s AND nome = %s;"
 
         try:
             with self._get_connection() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-                    cur.execute(query_insert, (comune_id, nome.strip(), tipo_id, actual_civico))
+                    cur.execute(query_insert, (comune_id, nome.strip(), tipo_id))
                     insert_result = cur.fetchone()
 
                     if insert_result and insert_result['id']:
                         localita_id = insert_result['id']
                         self.logger.info(f"Località '{nome}' inserita con successo. ID: {localita_id}.")
-                    else: # Conflitto, recupera l'ID esistente
-                        cur.execute(query_select, (comune_id, nome.strip(), tipo_id, actual_civico, actual_civico))
+                    else:
+                        cur.execute(query_select, (comune_id, nome.strip()))
                         select_result = cur.fetchone()
                         if select_result and select_result['id']:
                             localita_id = select_result['id']
@@ -1334,7 +1384,7 @@ class CatastoDBManager:
                             raise DBMError(f"Logica inconsistente: impossibile inserire o trovare la località '{nome}'.")
             return localita_id
         except Exception as e:
-            self.logger.error(f"Errore in insert_localita per '{nome}': {e}", exc_info=True)
+            self.logger.error(f"Errore in create_localita per '{nome}': {e}", exc_info=True)
             raise DBMError(f"Errore database durante l'operazione sulla località: {e}") from e
 
     def get_localita_details(self, localita_id: int) -> Optional[Dict[str, Any]]:
@@ -1342,8 +1392,9 @@ class CatastoDBManager:
         if not isinstance(localita_id, int) or localita_id <= 0: return None
 
         query = f"""
-            SELECT loc.id, loc.nome, loc.tipo, loc.civico, loc.comune_id, com.nome AS comune_nome
+            SELECT loc.id, loc.nome, tl.nome AS tipo, loc.comune_id, com.nome AS comune_nome
             FROM {self.schema}.localita loc
+            LEFT JOIN {self.schema}.tipo_localita tl ON loc.tipo_id = tl.id
             JOIN {self.schema}.comune com ON loc.comune_id = com.id
             WHERE loc.id = %s;
         """
@@ -1356,7 +1407,7 @@ class CatastoDBManager:
         except Exception as e:
             self.logger.error(f"Errore DB in get_localita_details per ID {localita_id}: {e}", exc_info=True)
             return None
-    def update_localita(self, localita_id: int, dati_modificati: Dict[str, Any]):
+    def update_localita(self, localita_id: int, dati_modificati: Dict[str, Any]) -> bool:
         """Aggiorna i dati di una località esistente, usando tipo_id."""
         if not (isinstance(localita_id, int) and localita_id > 0): raise DBDataError("ID località non valido.")
         if not isinstance(dati_modificati, dict) or not dati_modificati: raise DBDataError("Dati per aggiornamento non validi.")
@@ -1374,13 +1425,9 @@ class CatastoDBManager:
             params.append(dati_modificati["tipo_id"])
         # --- FINE MODIFICA ---
 
-        if "civico" in dati_modificati:
-            set_clauses.append("civico = %s")
-            params.append(dati_modificati["civico"] if dati_modificati["civico"] else None)
-
         if not set_clauses:
             self.logger.info(f"Nessun campo valido fornito per aggiornare località ID {localita_id}.")
-            return
+            return True
 
         set_clauses.append("data_modifica = CURRENT_TIMESTAMP")
         query = f"UPDATE {self.schema}.localita SET {', '.join(set_clauses)} WHERE id = %s;"
@@ -1393,6 +1440,7 @@ class CatastoDBManager:
                     if cur.rowcount == 0:
                         raise DBNotFoundError(f"Nessuna località trovata con ID {localita_id} da aggiornare.")
             self.logger.info(f"Località ID {localita_id} aggiornata con successo.")
+            return True
         except Exception as e:
             self.logger.error(f"Errore DB aggiornando località ID {localita_id}: {e}", exc_info=True)
             raise DBMError(f"Impossibile aggiornare la località: {e}") from e
@@ -1458,12 +1506,12 @@ class CatastoDBManager:
                     # --- INIZIO CORREZIONE QUI ---
                     # 3. Immobili (query aggiornata con JOIN a tipo_localita)
                     query_imm = f"""
-                        SELECT i.id, i.natura, i.numero_piani, i.numero_vani, i.consistenza, 
-                            i.classificazione, l.nome as localita_nome, tl.nome as localita_tipo, l.civico 
-                        FROM {self.schema}.immobile i 
+                        SELECT i.id, i.natura, i.numero_piani, i.numero_vani, i.consistenza,
+                            i.classificazione, l.nome as localita_nome, tl.nome as localita_tipo
+                        FROM {self.schema}.immobile i
                         JOIN {self.schema}.localita l ON i.localita_id = l.id
                         LEFT JOIN {self.schema}.tipo_localita tl ON l.tipo_id = tl.id
-                        WHERE i.partita_id = %s 
+                        WHERE i.partita_id = %s
                         ORDER BY l.nome, i.natura;
                     """
                     # --- FINE CORREZIONE QUI ---
@@ -1493,13 +1541,17 @@ class CatastoDBManager:
         except Exception as e:
             self.logger.error(f"Errore DB in get_partita_details (ID: {partita_id}): {e}", exc_info=True)
             return None
-    def update_partita(self, partita_id: int, dati_modificati: Dict[str, Any]):
+    def update_partita(self, partita_id: int, dati_modificati: Dict[str, Any]) -> bool:
         """Aggiorna i dati di una partita esistente in modo transazionale e sicuro."""
         if not isinstance(partita_id, int) or partita_id <= 0:
             raise DBDataError(f"ID partita non valido: {partita_id}")
         if not dati_modificati:
             self.logger.info("Nessun dato fornito per l'aggiornamento della partita.")
-            return
+            return True
+
+        data_impianto = dati_modificati.get("data_impianto")
+        data_chiusura = dati_modificati.get("data_chiusura")
+        self._valida_intervallo_date(data_impianto, data_chiusura, "Data Impianto", "Data Chiusura")
 
         allowed_fields = ["numero_partita", "tipo", "stato", "data_impianto", "data_chiusura", "numero_provenienza"]
         set_clauses = [f"{field} = %s" for field in allowed_fields if field in dati_modificati]
@@ -1508,10 +1560,10 @@ class CatastoDBManager:
         if "suffisso_partita" in dati_modificati:
             set_clauses.append("suffisso_partita = %s")
             params.append(dati_modificati["suffisso_partita"])
-        
+
         if not set_clauses:
             self.logger.info("Nessun campo valido fornito per l'aggiornamento della partita.")
-            return
+            return True
 
         set_clauses.append("data_modifica = CURRENT_TIMESTAMP")
         params.append(partita_id)
@@ -1526,10 +1578,11 @@ class CatastoDBManager:
                         raise DBNotFoundError(f"Nessuna partita trovata con ID {partita_id} per l'aggiornamento.")
             # Il commit è automatico qui
             self.logger.info(f"Partita ID {partita_id} aggiornata con successo.")
+            return True
         except Exception as e:
             self.logger.error(f"Errore DB aggiornando partita ID {partita_id}: {e}", exc_info=True)
-            # Rilancia come DBMError per il chiamante
             raise DBMError(f"Impossibile aggiornare la partita: {e}") from e
+
     def update_comune(self, comune_id: int, dati_modificati: Dict[str, Any]) -> bool:
         """
         Aggiorna i dati di un comune esistente in modo transazionale e sicuro.
@@ -1539,8 +1592,12 @@ class CatastoDBManager:
         if not dati_modificati:
             self.logger.info(f"Nessun dato fornito per aggiornare comune ID {comune_id}.")
             return True
+        self._valida_intervallo_date(
+            dati_modificati.get("data_istituzione"),
+            dati_modificati.get("data_soppressione"),
+            "Data Istituzione", "Data Soppressione"
+        )
 
-        # La logica per costruire la query dinamicamente rimane invariata
         allowed_fields_map = {
             "nome": "nome", "provincia": "provincia", "regione": "regione",
             "codice_catastale": "codice_catastale", "periodo_id": "periodo_id",
@@ -1582,13 +1639,13 @@ class CatastoDBManager:
             self.logger.error(f"Errore imprevisto DB aggiornando comune ID {comune_id}: {e}", exc_info=True)
             raise DBMError(f"Impossibile aggiornare il comune: {e}") from e
     
-    def update_possessore(self, possessore_id: int, dati_modificati: Dict[str, Any]):
+    def update_possessore(self, possessore_id: int, dati_modificati: Dict[str, Any]) -> bool:
         """Aggiorna i dati di un possessore esistente in modo transazionale e sicuro."""
         if not isinstance(possessore_id, int) or possessore_id <= 0:
             raise DBDataError(f"ID possessore non valido: {possessore_id}")
         if not dati_modificati:
             self.logger.info(f"Nessun dato fornito per aggiornare possessore ID {possessore_id}.")
-            return
+            return True
 
         # Logica di costruzione query (invariata)
         set_clauses, params = [], []
@@ -1604,7 +1661,7 @@ class CatastoDBManager:
 
         if not set_clauses:
             self.logger.info(f"Nessun campo valido da aggiornare per possessore {possessore_id}.")
-            return
+            return True
             
         set_clauses.append("data_modifica = CURRENT_TIMESTAMP")
         query = f"UPDATE {self.schema}.possessore SET {', '.join(set_clauses)} WHERE id = %s;"
@@ -1618,6 +1675,7 @@ class CatastoDBManager:
                         raise DBNotFoundError(f"Nessun possessore trovato con ID {possessore_id} da aggiornare.")
             
             self.logger.info(f"Possessore ID {possessore_id} aggiornato con successo.")
+            return True
 
         except (DBNotFoundError, DBDataError, DBUniqueConstraintError) as e:
             self.logger.error(f"Errore previsto aggiornando possessore {possessore_id}: {e}", exc_info=True)
@@ -1625,7 +1683,67 @@ class CatastoDBManager:
         except Exception as e:
             self.logger.error(f"Errore imprevisto DB aggiornando possessore {possessore_id}: {e}", exc_info=True)
             raise DBMError(f"Impossibile aggiornare il possessore: {e}") from e
-        
+
+    # ------------------------------------------------------------------
+    # ARCHIVIAZIONE LOGICA (soft delete)
+    # ------------------------------------------------------------------
+
+    def archivia_comune(self, comune_id: int) -> None:
+        if not isinstance(comune_id, int) or comune_id <= 0:
+            raise DBDataError("ID comune non valido.")
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(f"CALL {self.schema}.archivia_comune(%s);", (comune_id,))
+            self.logger.info(f"Comune ID {comune_id} archiviato.")
+        except psycopg2.errors.RaiseException as e:
+            raise DBNotFoundError(str(e)) from e
+        except Exception as e:
+            self.logger.error(f"Errore archiviazione comune {comune_id}: {e}", exc_info=True)
+            raise DBMError(f"Impossibile archiviare il comune: {e}") from e
+
+    def archivia_partita(self, partita_id: int) -> None:
+        if not isinstance(partita_id, int) or partita_id <= 0:
+            raise DBDataError("ID partita non valido.")
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(f"CALL {self.schema}.archivia_partita(%s);", (partita_id,))
+            self.logger.info(f"Partita ID {partita_id} archiviata.")
+        except psycopg2.errors.RaiseException as e:
+            raise DBNotFoundError(str(e)) from e
+        except Exception as e:
+            self.logger.error(f"Errore archiviazione partita {partita_id}: {e}", exc_info=True)
+            raise DBMError(f"Impossibile archiviare la partita: {e}") from e
+
+    def archivia_possessore(self, possessore_id: int) -> None:
+        if not isinstance(possessore_id, int) or possessore_id <= 0:
+            raise DBDataError("ID possessore non valido.")
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(f"CALL {self.schema}.archivia_possessore(%s);", (possessore_id,))
+            self.logger.info(f"Possessore ID {possessore_id} archiviato.")
+        except psycopg2.errors.RaiseException as e:
+            raise DBNotFoundError(str(e)) from e
+        except Exception as e:
+            self.logger.error(f"Errore archiviazione possessore {possessore_id}: {e}", exc_info=True)
+            raise DBMError(f"Impossibile archiviare il possessore: {e}") from e
+
+    def archivia_localita(self, localita_id: int) -> None:
+        if not isinstance(localita_id, int) or localita_id <= 0:
+            raise DBDataError("ID località non valido.")
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(f"CALL {self.schema}.archivia_localita(%s);", (localita_id,))
+            self.logger.info(f"Località ID {localita_id} archiviata.")
+        except psycopg2.errors.RaiseException as e:
+            raise DBNotFoundError(str(e)) from e
+        except Exception as e:
+            self.logger.error(f"Errore archiviazione località {localita_id}: {e}", exc_info=True)
+            raise DBMError(f"Impossibile archiviare la località: {e}") from e
+
     def search_partite(self, comune_id: Optional[int] = None, numero_partita: Optional[int] = None,
                     possessore: Optional[str] = None, immobile_natura: Optional[str] = None,
                     suffisso_partita: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -1633,9 +1751,8 @@ class CatastoDBManager:
         Ricerca partite con filtri multipli, usando il nuovo pattern di connessione sicuro.
         """
         try:
-            # La logica di costruzione della query rimane invariata
-            conditions, params, joins = [], [], ""
-            select_cols = "p.id, c.nome as comune_nome, p.numero_partita, p.suffisso_partita, p.tipo, p.stato" 
+            conditions, params, joins = ["p.archiviato = FALSE"], [], ""
+            select_cols = "p.id, c.nome as comune_nome, p.numero_partita, p.suffisso_partita, p.tipo, p.stato"
             query_base = f"SELECT DISTINCT {select_cols} FROM {self.schema}.partita p JOIN {self.schema}.comune c ON p.comune_id = c.id"
 
             if possessore:
@@ -2175,11 +2292,12 @@ class CatastoDBManager:
                 i.numero_piani, i.numero_vani,
                 p.numero_partita, p.suffisso_partita,
                 c.nome AS comune_nome,
-                l.nome AS localita_nome, l.tipo AS localita_tipo, l.civico
+                l.nome AS localita_nome, tl.nome AS localita_tipo
             FROM {self.schema}.immobile i
             JOIN {self.schema}.partita p ON i.partita_id = p.id
             JOIN {self.schema}.comune c ON p.comune_id = c.id
             JOIN {self.schema}.localita l ON i.localita_id = l.id
+            LEFT JOIN {self.schema}.tipo_localita tl ON l.tipo_id = tl.id
             WHERE i.id = %s;
         """
         try:
@@ -3821,12 +3939,11 @@ class CatastoDBManager:
             SELECT
                 l.id AS entity_id,
                 l.nome AS display_text,
-                'Tipo: ' || COALESCE(tl.nome, 'N/D') || ', Civico: ' || COALESCE(CAST(l.civico AS TEXT), 'N/A') || ' | Comune: ' || c.nome AS detail_text,
+                'Tipo: ' || COALESCE(tl.nome, 'N/D') || ' | Comune: ' || c.nome AS detail_text,
                 similarity(l.nome, %s) AS similarity_score,
                 'nome' AS search_field,
                 l.nome,
-                tl.nome AS tipo, -- Selezioniamo il nome dalla tabella joinata
-                l.civico,
+                tl.nome AS tipo,
                 c.nome as comune_nome,
                 COALESCE(im.num_immobili, 0) as num_immobili
             FROM {self.schema}.localita l
@@ -4262,25 +4379,3 @@ class CatastoDBManager:
         return env
 
     
-
-    
-        
-# --- Esempio di utilizzo minimale (invariato) ---
-if __name__ == "__main__":
-    print("Esecuzione test minimale CatastoDBManager...")
-    db = CatastoDBManager(password="Markus74") # Usa la tua password
-    if db.connect():
-        print("Connessione OK.")
-        comuni_carcare = db.get_comuni("Carcare")
-        carcare_id = None
-        if comuni_carcare:
-            carcare_id = comuni_carcare[0]['id']
-            print(f"Trovato comune 'Carcare' con ID: {carcare_id}")
-            possessori = db.get_possessori_by_comune(carcare_id)
-            if possessori: print(f"Trovati {len(possessori)} possessori per Carcare (ID: {carcare_id}):")
-            else: print(f"Nessun possessore trovato per Carcare (ID: {carcare_id}) o errore.")
-        else: print("Comune 'Carcare' non trovato.")
-        db.disconnect()
-        print("Disconnessione OK.")
-    else:
-        print("Connessione fallita.")

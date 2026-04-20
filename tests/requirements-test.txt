@@ -11,4 +11,4 @@ psycopg2-binary>=2.9.0
 
 # GUI (opzionale per ora)
 # PyQt5>=5.15.0
-# pytest-qt>=4.2.0
+pytest-qt>=4.2.0

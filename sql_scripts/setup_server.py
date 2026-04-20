@@ -27,7 +27,10 @@ BASE_SQL_SCRIPTS = [
     "sql_scripts/15_integration_audit_users.sql",
     "sql_scripts/16_advanced_search.sql",
     "sql_scripts/17_funzione_ricerca_immobili.sql",
-    "sql_scripts/20_feature_tipi_localita.sql"
+    "sql_scripts/20_feature_tipi_localita.sql",
+    "sql_scripts/21_soft_delete.sql",
+    "sql_scripts/22_drop_civico_localita.sql",
+    "sql_scripts/23_titoli_possesso.sql"
 ]
 
 # Definizione degli script opzionali
