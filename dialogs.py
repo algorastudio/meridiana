@@ -3800,13 +3800,13 @@ class LocalitaSelectionDialog(QDialog):
         Salva una nuova località dal tab "Crea Nuova Località".
         """
         nome = self.nome_edit_nuova.text().strip()
-        tipo = self.tipo_combo_nuova.currentText()
+        tipo_id = self.tipo_combo_nuova.currentData()
 
         if not nome:
             QMessageBox.warning(self, "Dati Mancanti", "Il nome della località è obbligatorio.")
             self.nome_edit_nuova.setFocus()
             return
-        if not tipo or tipo.strip() == "Seleziona Tipo...":
+        if tipo_id is None:
             QMessageBox.warning(self, "Dati Mancanti", "Il tipo di località è obbligatorio.")
             self.tipo_combo_nuova.setFocus()
             return
@@ -3816,7 +3816,7 @@ class LocalitaSelectionDialog(QDialog):
 
         try:
             localita_id_creata = self.db_manager.create_localita(
-                self.comune_id, nome, tipo
+                self.comune_id, nome, tipo_id
             )
 
             if localita_id_creata is not None:
@@ -5021,13 +5021,13 @@ class LocalitaSelectionDialog(QDialog):
         Salva una nuova località dal tab "Crea Nuova Località".
         """
         nome = self.nome_edit_nuova.text().strip()
-        tipo = self.tipo_combo_nuova.currentText()
+        tipo_id = self.tipo_combo_nuova.currentData()
 
         if not nome:
             QMessageBox.warning(self, "Dati Mancanti", "Il nome della località è obbligatorio.")
             self.nome_edit_nuova.setFocus()
             return
-        if not tipo or tipo.strip() == "Seleziona Tipo...":
+        if tipo_id is None:
             QMessageBox.warning(self, "Dati Mancanti", "Il tipo di località è obbligatorio.")
             self.tipo_combo_nuova.setFocus()
             return
@@ -5037,7 +5037,7 @@ class LocalitaSelectionDialog(QDialog):
 
         try:
             localita_id_creata = self.db_manager.create_localita(
-                self.comune_id, nome, tipo
+                self.comune_id, nome, tipo_id
             )
 
             if localita_id_creata is not None:
