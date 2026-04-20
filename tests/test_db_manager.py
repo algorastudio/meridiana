@@ -430,10 +430,10 @@ class TestPartitaCRUD:
     def test_update_partita(self, sample_data):
         db = sample_data['db']
         pid = sample_data['partita_id']
-        result = db.update_partita(pid, {'stato': 'chiusa', 'data_chiusura': date(1950, 12, 31)})
+        result = db.update_partita(pid, {'stato': 'inattiva', 'data_chiusura': date(1950, 12, 31)})
         assert result is True
         p = db.get_partita_details(pid)
-        assert p['stato'] == 'chiusa'
+        assert p['stato'] == 'inattiva'
 
     def test_update_partita_date_invertite(self, sample_data):
         db = sample_data['db']
@@ -801,7 +801,7 @@ class TestDashboard:
     def test_get_dashboard_stats(self, db_manager):
         stats = db_manager.get_dashboard_stats()
         assert isinstance(stats, dict)
-        for key in ('comuni', 'possessori', 'partite', 'immobili'):
+        for key in ('total_comuni', 'total_possessori', 'total_partite', 'total_immobili'):
             assert key in stats
             assert isinstance(stats[key], int)
 
