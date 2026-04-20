@@ -675,7 +675,58 @@ class CatastoDBManager:
         except Exception as e:
             self.logger.error(f"Errore in elimina_tipo_localita: {e}", exc_info=True)
             raise DBMError("Eliminazione della tipologia fallita.") from e
-    # In catasto_db_manager.py, aggiungi questo nuovo metodo
+
+    def get_titoli_possesso(self) -> List[Dict[str, Any]]:
+        """Recupera tutti i titoli di possesso disponibili."""
+        query = f"SELECT id, nome, descrizione FROM {self.schema}.titolo_possesso ORDER BY nome;"
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                    cur.execute(query)
+                    return [dict(row) for row in cur.fetchall()]
+        except Exception as e:
+            self.logger.error(f"Errore nel recuperare i titoli di possesso: {e}", exc_info=True)
+            raise DBMError("Impossibile recuperare i titoli di possesso.") from e
+
+    def gestisci_titolo_possesso(self, titolo_id: Optional[int], nome: str, descrizione: Optional[str] = None) -> int:
+        """Crea o aggiorna un titolo di possesso."""
+        if not nome or not nome.strip():
+            raise DBDataError("Il nome del titolo di possesso non può essere vuoto.")
+        nome = nome.strip()
+        descrizione = descrizione.strip() if descrizione else None
+        if titolo_id:
+            query = f"UPDATE {self.schema}.titolo_possesso SET nome = %s, descrizione = %s WHERE id = %s RETURNING id;"
+            params = (nome, descrizione, titolo_id)
+        else:
+            query = f"INSERT INTO {self.schema}.titolo_possesso (nome, descrizione) VALUES (%s, %s) ON CONFLICT (nome) DO NOTHING RETURNING id;"
+            params = (nome, descrizione)
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query, params)
+                    result = cur.fetchone()
+                    if result:
+                        return result[0]
+                    raise DBUniqueConstraintError(f"Un titolo con nome '{nome}' esiste già.")
+        except psycopg2.errors.UniqueViolation:
+            raise DBUniqueConstraintError(f"Un titolo con nome '{nome}' esiste già.") from None
+        except (DBDataError, DBUniqueConstraintError):
+            raise
+        except Exception as e:
+            self.logger.error(f"Errore in gestisci_titolo_possesso: {e}", exc_info=True)
+            raise DBMError("Operazione sul titolo di possesso fallita.") from e
+
+    def elimina_titolo_possesso(self, titolo_id: int) -> bool:
+        """Elimina un titolo di possesso."""
+        query = f"DELETE FROM {self.schema}.titolo_possesso WHERE id = %s;"
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query, (titolo_id,))
+                    return cur.rowcount > 0
+        except Exception as e:
+            self.logger.error(f"Errore in elimina_titolo_possesso: {e}", exc_info=True)
+            raise DBMError("Eliminazione del titolo di possesso fallita.") from e
 
     # In catasto_db_manager.py, SOSTITUISCI il metodo get_immobili_by_comune
 

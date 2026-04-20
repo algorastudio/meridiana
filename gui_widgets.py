@@ -1194,9 +1194,104 @@ class GestioneTipiLocalitaWidget(LazyLoadedWidget):
             except DBMError as e:
                 QMessageBox.critical(self, "Errore Eliminazione", str(e))
 
-# In gui_widgets.py, SOSTITUISCI l'intera classe GestionePeriodiStoriciWidget
+class GestioneTitoliPossessoWidget(LazyLoadedWidget):
+    def __init__(self, db_manager: 'CatastoDBManager', parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self._initUI()
 
-# Assicurati che queste importazioni siano presenti all'inizio del file
+    def _initUI(self):
+        layout = QVBoxLayout(self)
+        group = QGroupBox("Gestione Titoli di Possesso (Proprietà, Usufrutto, Enfiteusi, etc.)")
+        group_layout = QHBoxLayout(group)
+
+        self.table = QTableWidget()
+        self.table.setColumnCount(3)
+        self.table.setHorizontalHeaderLabels(["ID", "Titolo", "Descrizione"])
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        group_layout.addWidget(self.table, 2)
+
+        button_layout = QVBoxLayout()
+        btn_add = QPushButton("Aggiungi...")
+        btn_add.clicked.connect(self._add_or_edit_item)
+        btn_edit = QPushButton("Modifica...")
+        btn_edit.clicked.connect(lambda: self._add_or_edit_item(edit_mode=True))
+        btn_del = QPushButton("Elimina")
+        btn_del.clicked.connect(self._delete_item)
+        btn_refresh = QPushButton(QApplication.style().standardIcon(QStyle.SP_BrowserReload), " Aggiorna")
+        btn_refresh.clicked.connect(self.load_data)
+
+        button_layout.addWidget(btn_add)
+        button_layout.addWidget(btn_edit)
+        button_layout.addWidget(btn_del)
+        button_layout.addSpacing(20)
+        button_layout.addWidget(btn_refresh)
+        button_layout.addStretch()
+        group_layout.addLayout(button_layout, 1)
+
+        layout.addWidget(group)
+        self.setLayout(layout)
+
+    def load_data(self):
+        self.table.setRowCount(0)
+        try:
+            titoli = self.db_manager.get_titoli_possesso()
+            for t in titoli:
+                row = self.table.rowCount()
+                self.table.insertRow(row)
+                self.table.setItem(row, 0, QTableWidgetItem(str(t['id'])))
+                self.table.setItem(row, 1, QTableWidgetItem(t['nome']))
+                self.table.setItem(row, 2, QTableWidgetItem(t.get('descrizione', '') or ''))
+            self.table.resizeColumnToContents(0)
+        except DBMError as e:
+            QMessageBox.critical(self, "Errore Caricamento", str(e))
+
+    def _load_data_on_first_show(self):
+        self.load_data()
+
+    def _add_or_edit_item(self, edit_mode=False):
+        titolo_id, old_nome, old_desc = None, "", ""
+        if edit_mode:
+            selected = self.table.selectedItems()
+            if not selected:
+                QMessageBox.warning(self, "Selezione Mancante", "Seleziona un titolo da modificare.")
+                return
+            row = selected[0].row()
+            titolo_id = int(self.table.item(row, 0).text())
+            old_nome = self.table.item(row, 1).text()
+            old_desc = self.table.item(row, 2).text()
+
+        nome, ok = QInputDialog.getText(self, "Titolo di Possesso", "Titolo:", text=old_nome)
+        if ok and nome:
+            desc, ok2 = QInputDialog.getText(self, "Titolo di Possesso", "Descrizione (opzionale):", text=old_desc)
+            if ok2:
+                try:
+                    self.db_manager.gestisci_titolo_possesso(titolo_id, nome, desc)
+                    self.load_data()
+                except (DBMError, DBDataError, DBUniqueConstraintError) as e:
+                    QMessageBox.critical(self, "Errore", str(e))
+
+    def _delete_item(self):
+        selected = self.table.selectedItems()
+        if not selected:
+            QMessageBox.warning(self, "Selezione Mancante", "Seleziona un titolo da eliminare.")
+            return
+        row = selected[0].row()
+        titolo_id = int(self.table.item(row, 0).text())
+        nome = self.table.item(row, 1).text()
+        reply = QMessageBox.question(self, "Conferma Eliminazione",
+                                     f"Eliminare il titolo '{nome}'?",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            try:
+                self.db_manager.elimina_titolo_possesso(titolo_id)
+                self.load_data()
+            except DBMError as e:
+                QMessageBox.critical(self, "Errore Eliminazione", str(e))
+
 
 class GestionePeriodiStoriciWidget(LazyLoadedWidget):
     def __init__(self, db_manager: 'CatastoDBManager', parent=None):

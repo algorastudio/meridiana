@@ -46,7 +46,7 @@ from gui_widgets import (
     OperazioniPartitaWidget, EsportazioniWidget, ReportisticaWidget, StatisticheWidget,
     GestioneUtentiWidget, AuditLogViewerWidget, BackupWidget, 
     RegistraConsultazioneWidget, WelcomeScreen  , RicercaPartiteWidget,GestionePeriodiStoriciWidget ,
-    GestioneTipiLocalitaWidget , 
+    GestioneTipiLocalitaWidget, GestioneTitoliPossessoWidget,
     DBConfigDialog,InserimentoPartitaWidget)
 from dialogs import CSVImportResultDialog,EulaDialog
 
@@ -680,6 +680,9 @@ class CatastoMainWindow(QMainWindow):
             self.gestione_tipi_localita_widget = GestioneTipiLocalitaWidget(self.db_manager)
             self.inserimento_sub_tabs.addTab(self.gestione_tipi_localita_widget, "Tipi Località")
 
+            self.gestione_titoli_possesso_widget = GestioneTitoliPossessoWidget(self.db_manager)
+            self.inserimento_sub_tabs.addTab(self.gestione_titoli_possesso_widget, "Titoli Possesso")
+
             self.gestione_periodi_widget = GestionePeriodiStoriciWidget(self.db_manager)
             self.inserimento_sub_tabs.addTab(self.gestione_periodi_widget, "Periodi")
 
@@ -695,6 +698,7 @@ class CatastoMainWindow(QMainWindow):
         
         if self.logged_in_user_info and self.logged_in_user_info.get('ruolo') == 'admin':
             self.inserimento_sub_tabs.setTabToolTip(tab_idx, "Gestione Tipi Località\nGestisci le tipologie di località (Via, Piazza, ecc.)"); tab_idx += 1
+            self.inserimento_sub_tabs.setTabToolTip(tab_idx, "Gestione Titoli di Possesso\nAggiungi, modifica o rimuovi i titoli giuridici (Proprietà, Usufrutto, ecc.)"); tab_idx += 1
             self.inserimento_sub_tabs.setTabToolTip(tab_idx, "Gestione Periodi Storici\nDefinisci i periodi storici di riferimento")
 
         layout_inserimento.addWidget(self.inserimento_sub_tabs)
