@@ -15,9 +15,9 @@ from typing import Optional, List, Dict, Any
 # Importazioni PyQt5
 from PyQt5.QtCore import QDate
 from PyQt5.QtGui import QFont # QFont serve per i report
-from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QTextEdit, QDialogButtonBox,
+from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QTextEdit, QDialogButtonBox, QFileDialog,
                              QTableWidget, QTableWidgetItem, QAbstractItemView,
-                             QMessageBox, QFileDialog)
+                             QMessageBox)
 from catasto_db_manager import CatastoDBManager
 
 
@@ -377,7 +377,6 @@ def gui_esporta_partita_csv(parent_widget, db_manager: CatastoDBManager, partita
 
     preview_dialog = CSVApreviewDialog(preview_headers, preview_data_rows, parent_widget,
                                        title=f"Anteprima CSV - Partita ID {partita_id}")
-    pdf.alias_nb_pages()
     if preview_dialog.exec_() != QDialog.Accepted:
         logging.getLogger("CatastoGUI").info(f"Esportazione CSV per partita ID {partita_id} annullata dall'utente dopo anteprima.")
         return
@@ -599,7 +598,6 @@ def gui_esporta_possessore_csv(parent_widget, db_manager: CatastoDBManager, poss
 
     preview_dialog = CSVApreviewDialog(preview_headers, preview_data_rows, parent_widget,
                                        title=f"Anteprima CSV - Possessore ID {possessore_id}")
-    pdf.alias_nb_pages()
     if preview_dialog.exec_() != QDialog.Accepted:
         logging.getLogger("CatastoGUI").info(f"Esportazione CSV per possessore ID {possessore_id} annullata dall'utente.")
         return
@@ -752,7 +750,6 @@ def gui_esporta_possessore_pdf(parent_widget, db_manager: CatastoDBManager, poss
                              f"Errore durante l'esportazione PDF:\n{e}")
 # In app_utils.py, dopo le importazioni
 
-import os # Assicurati che 'os' sia importato
 
 def _get_default_export_path(default_filename: str) -> str:
     """
@@ -859,14 +856,14 @@ if FPDF_AVAILABLE:
 
         def header(self):
             self.set_font('Helvetica', 'B', 12)
-            self.cell(0, 10, self.report_title, 0, 1, 'C')
+            self.cell(0, 10, self.report_title, border=0, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
             self.ln(5)
             # Stampa l'intestazione della tabella su ogni pagina
             if self.headers:
                 self.set_font('Helvetica', 'B', 8)
                 self.set_fill_color(230, 230, 230)
                 for i, header in enumerate(self.headers):
-                    self.cell(self.col_widths[i], 7, header, 1, 0, 'C', 1)
+                    self.cell(self.col_widths[i], 7, header, border=1, new_x=XPos.RIGHT, new_y=YPos.TOP, align='C', fill=True)
                 self.ln()
 
         def footer(self):
@@ -900,7 +897,7 @@ if FPDF_AVAILABLE:
                         cell_value = str(row.get(header, ''))
                     else:
                         cell_value = str(row[i]) if i < len(row) else ''
-                    self.cell(self.col_widths[i], 6, cell_value, 1, 0, 'L')
+                    self.cell(self.col_widths[i], 6, cell_value, border=1, new_x=XPos.RIGHT, new_y=YPos.TOP, align='L')
                 self.ln()
 # In fondo al file app_utils.py
 

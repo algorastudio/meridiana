@@ -27,9 +27,8 @@ from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication,
                              QPushButton, QScrollArea, QSizePolicy, QSpacerItem,
                              QSpinBox, QStyle, QStyleFactory, QTabWidget,
                              QTableWidget, QTableWidgetItem, QTextEdit,
-                             QVBoxLayout, QWidget, QDateEdit,
-                             QGraphicsScene, QGraphicsView, QDialog, QVBoxLayout, 
-                             QTextBrowser, QDialogButtonBox, QRadioButton)
+                             QVBoxLayout, QWidget, QGraphicsScene, QGraphicsView, 
+                             QTextBrowser, QRadioButton)
 
 from PyQt5.QtGui import QPainter
 from app_paths import get_resource_path
@@ -5594,7 +5593,7 @@ class EulaDialog(QDialog):
             
             # Percorso 1: Usando resource_path (originale)
             try:
-                eula_path_1 = resource_path(os.path.join("resources", "EULA.txt"))
+                eula_path_1 = get_resource_path(os.path.join("resources", "EULA.txt"))
                 possible_paths.append(eula_path_1)
             except:
                 pass
@@ -5670,4 +5669,3 @@ def _verify_password(stored_hash: str, provided_password: str) -> bool:
         logging.getLogger("CatastoGUI").error(
             f"Errore imprevisto durante la verifica bcrypt: {e}")
         return False
-

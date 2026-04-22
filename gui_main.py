@@ -5,13 +5,14 @@
 Interfaccia Grafica per Gestionale Catasto Storico
 =================================================
 Autore: Marco Santoro
-Data: 18/05/2025
+Data: 21/04/2026
 Versione: 1.2.1
 """
 import sys,bcrypt
-from gui_widgets import UnifiedFuzzySearchWidget
+import zipfile
 import os
 import logging
+from logging.handlers import RotatingFileHandler
 from datetime import datetime
 from typing import Optional, Dict
 # Importazioni PyQt5
@@ -27,7 +28,8 @@ from PyQt5.QtWidgets import (QAction, QActionGroup, QApplication, # <-- AGGIUNTO
                              QHBoxLayout, QInputDialog,
                              QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton, QStyle, QTabWidget,
                              QVBoxLayout, QWidget)
-# --- FINE MODIFICA ---
+from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt5.QtWidgets import QProgressDialog
 
 
 
@@ -35,7 +37,7 @@ from catasto_db_manager import CatastoDBManager
 from app_utils import get_local_ip_address, get_password_from_keyring 
 import pandas as pd # Importa pandas
 from app_paths import get_available_styles, load_stylesheet, get_logo_path, get_resource_path
-from dialogs import CSVImportResultDialog, EulaDialog,BackupReminderSettingsDialog
+from dialogs import CSVImportResultDialog, DBConfigDialog, BackupReminderSettingsDialog
 
 
 # Dai nuovi moduli che creeremo:
@@ -46,9 +48,7 @@ from gui_widgets import (
     OperazioniPartitaWidget, EsportazioniWidget, ReportisticaWidget, StatisticheWidget,
     GestioneUtentiWidget, AuditLogViewerWidget, BackupWidget, 
     RegistraConsultazioneWidget, WelcomeScreen  , RicercaPartiteWidget,GestionePeriodiStoriciWidget ,
-    GestioneTipiLocalitaWidget, GestioneTitoliPossessoWidget,
-    DBConfigDialog,InserimentoPartitaWidget)
-from dialogs import CSVImportResultDialog,EulaDialog
+    GestioneTipiLocalitaWidget, GestioneTitoliPossessoWidget, InserimentoPartitaWidget, EulaDialog)
 
 from custom_widgets import QPasswordLineEdit
 
@@ -271,7 +271,43 @@ try:
 except ImportError as e:
     print(f"[INIT] Ricerca fuzzy non disponibile")
     FUZZY_SEARCH_AVAILABLE = False
+class CSVImportThread(QThread):
+    """
+    Thread dedicato per l'importazione massiva di CSV in background.
+    Previene il blocco dell'interfaccia grafica durante le operazioni DB lunghe.
+    """
+    # Segnali emessi verso il thread principale della GUI
+    finished_signal = pyqtSignal(dict)  # Restituisce il dizionario con successi/errori
+    error_signal = pyqtSignal(str)      # Restituisce il messaggio d'errore
 
+    def __init__(self, db_manager, import_type, file_path, comune_id, comune_nome, parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self.import_type = import_type  # Può essere 'possessori' o 'partite'
+        self.file_path = file_path
+        self.comune_id = comune_id
+        self.comune_nome = comune_nome
+
+    def run(self):
+        try:
+            # Esegue la funzione corretta in base al tipo richiesto
+            if self.import_type == 'possessori':
+                results = self.db_manager.import_possessori_from_csv(
+                    self.file_path, self.comune_id, self.comune_nome
+                )
+            elif self.import_type == 'partite':
+                results = self.db_manager.import_partite_from_csv(
+                    self.file_path, self.comune_id, self.comune_nome
+                )
+            else:
+                raise ValueError(f"Tipo di importazione '{self.import_type}' non supportato.")
+            
+            # Emette il risultato verso la GUI
+            self.finished_signal.emit(results)
+            
+        except Exception as e:
+            # Cattura qualsiasi errore DB o di file e lo passa alla GUI
+            self.error_signal.emit(str(e))
 class CatastoMainWindow(QMainWindow):
     
     def __init__(self, client_ip_address_gui: str):
@@ -545,6 +581,10 @@ class CatastoMainWindow(QMainWindow):
         show_eula_action.triggered.connect(self._show_about_eula_dialog)
         help_menu.addAction(show_eula_action)
         # --- FINE MODIFICA ---
+        help_menu.addSeparator()
+        export_log_action = QAction("Esporta Log di Sistema (Assistenza)...", self)
+        export_log_action.triggered.connect(self._esporta_log_sistema)
+        help_menu.addAction(export_log_action)
 
     def _change_stylesheet(self, filename: str):
         """Carica, applica e salva il nuovo stylesheet selezionato."""
@@ -1210,83 +1250,80 @@ class CatastoMainWindow(QMainWindow):
         event.accept()
    
     def _import_possessori_csv(self):
-        """
-        Gestisce il flusso di importazione dei possessori da CSV, chiamando la logica
-        di importazione nel DB manager e visualizzando i risultati dettagliati.
-        """
+        """Gestisce l'avvio dell'importazione dei possessori tramite thread."""
         try:
-            # --- PASSO 1: Selezione del comune (invariato) ---
+            # PASSO 1: Selezione del comune
             comuni = self.db_manager.get_elenco_comuni_semplice()
             if not comuni:
-                QMessageBox.warning(self, "Nessun Comune", "Nessun comune trovato nel database. Impossibile importare.")
+                QMessageBox.warning(self, "Nessun Comune", "Nessun comune trovato nel database.")
                 return
 
             nomi_comuni = [c[1] for c in comuni]
             nome_comune_selezionato, ok = QInputDialog.getItem(
-                self, "Selezione Comune", "A quale comune vuoi associare i nuovi possessori?",
-                nomi_comuni, 0, False
+                self, "Selezione Comune", "A quale comune vuoi associare i nuovi possessori?", nomi_comuni, 0, False
             )
-            
-            if not ok or not nome_comune_selezionato:
-                return
+            if not ok or not nome_comune_selezionato: return
 
-            comune_id_selezionato = None
-            for comun_id, comun_nome in comuni:
-                if comun_nome == nome_comune_selezionato:
-                    comune_id_selezionato = comun_id
-                    break
-            
-            if comune_id_selezionato is None:
-                QMessageBox.critical(self, "Errore", "Impossibile trovare l'ID del comune selezionato.")
-                return
+            comune_id_selezionato = next((cid for cid, cnome in comuni if cnome == nome_comune_selezionato), None)
 
-            # --- PASSO 2: Selezione del file CSV (invariato) ---
+            # PASSO 2: Selezione del file CSV
             file_path, _ = QFileDialog.getOpenFileName(
-                self, "Seleziona il file CSV con i possessori", "",
-                "File CSV (*.csv);;Tutti i file (*)"
+                self, "Seleziona il file CSV con i possessori", "", "File CSV (*.csv);;Tutti i file (*)"
             )
+            if not file_path: return
 
-            if not file_path:
-                return
+            # PASSO 3: Setup UI e Thread
+            # Creiamo un popup di attesa modale. Disabilitiamo il tasto "Annulla" per evitare
+            # di troncare bruscamente la connessione a PostgreSQL.
+            self.progress_dialog = QProgressDialog("Importazione in corso, l'operazione potrebbe richiedere alcuni minuti...", None, 0, 0, self)
+            self.progress_dialog.setWindowTitle("Importazione CSV - Meridiana")
+            self.progress_dialog.setWindowModality(Qt.WindowModal)
+            self.progress_dialog.setCancelButton(None)
+            self.progress_dialog.show()
 
-            # --- PASSO 3: Avvia l'importazione e mostra il nuovo dialogo di riepilogo ---
-            QApplication.setOverrideCursor(Qt.WaitCursor)
+            # Inizializziamo il thread
+            self.import_thread = CSVImportThread(self.db_manager, 'possessori', file_path, comune_id_selezionato, nome_comune_selezionato)
             
-            # --- MODIFICA CHIAVE QUI ---
-            # Chiamiamo il metodo del db_manager che ora restituisce un dizionario dettagliato.
-            # Passiamo anche il nome del comune per poterlo visualizzare nel report di successo.
-            import_results = self.db_manager.import_possessori_from_csv(
-                file_path, comune_id_selezionato, nome_comune_selezionato
-            )
+            # Colleghiamo i segnali ai nuovi slot
+            self.import_thread.finished_signal.connect(self._on_import_possessori_finished)
+            self.import_thread.error_signal.connect(self._on_import_error)
+            
+            # Avviamo il lavoro in background
+            self.import_thread.start()
 
-            # Invece di una semplice QMessageBox, creiamo e mostriamo il nostro nuovo dialogo.
-            result_dialog = CSVImportResultDialog(
-                import_results.get('success', []),
-                import_results.get('errors', []),
-                self
-            )
-            result_dialog.exec_()
-            # --- FINE MODIFICA ---
-
-            # Dopo l'importazione, aggiorniamo la vista dei comuni per riflettere eventuali
-            # cambiamenti (se ad esempio la vista mostrasse il numero di possessori).
-            if self.elenco_comuni_widget_ref:
-                self.elenco_comuni_widget_ref.load_data() # <-- CORRETTO
-
-        except DBMError as e:
-            self.logger.error(f"Errore DB durante il processo di importazione CSV: {e}", exc_info=True)
-            QMessageBox.critical(self, "Errore Database", f"Si è verificato un errore di database:\n\n{e}")
         except Exception as e:
-            self.logger.error(f"Errore imprevisto durante l'importazione CSV: {e}", exc_info=True)
-            QMessageBox.critical(self, "Errore durante l'importazione", f"Si è verificato un errore imprevisto:\n\n{e}")
-        finally:
-            QApplication.restoreOverrideCursor()
+            self.logger.error(f"Errore durante la preparazione CSV: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore", f"Impossibile avviare l'importazione: {e}")
+
+    # --- NUOVI SLOT PER LA GESTIONE DELLA FINE DEL THREAD ---
+    
+    def _on_import_possessori_finished(self, import_results):
+        """Callback eseguita quando il thread dei possessori termina con successo."""
+        if hasattr(self, 'progress_dialog') and self.progress_dialog:
+            self.progress_dialog.close()
+            
+        result_dialog = CSVImportResultDialog(
+            import_results.get('success', []),
+            import_results.get('errors', []),
+            self
+        )
+        result_dialog.exec_()
+        
+        if self.elenco_comuni_widget_ref:
+            self.elenco_comuni_widget_ref.load_data()
+
+    def _on_import_error(self, error_msg):
+        """Callback universale per gli errori nei thread di importazione."""
+        self.logger.error(f"Errore sollevato dal thread CSV: {error_msg}")
+        if hasattr(self, 'progress_dialog') and self.progress_dialog:
+            self.progress_dialog.close()
+            
+        QMessageBox.critical(self, "Errore Database", f"Si è verificato un errore durante l'importazione:\n\n{error_msg}")
     
     def _import_partite_csv(self):
-        """
-        Gestisce l'importazione di partite da un file CSV e mostra i risultati.
-        """
+        """Gestisce l'avvio dell'importazione delle partite tramite thread in background."""
         try:
+            # PASSO 1: Selezione del comune
             comuni = self.db_manager.get_elenco_comuni_semplice()
             if not comuni:
                 QMessageBox.warning(self, "Nessun Comune", "Nessun comune trovato nel database. Impossibile importare.")
@@ -1304,41 +1341,68 @@ class CatastoMainWindow(QMainWindow):
                 QMessageBox.critical(self, "Errore", "Impossibile trovare l'ID del comune selezionato.")
                 return
 
+            # PASSO 2: Selezione del file CSV
             file_path, _ = QFileDialog.getOpenFileName(
                 self, "Seleziona il file CSV con le partite", "", "File CSV (*.csv);;Tutti i file (*)"
             )
             if not file_path:
                 return
 
-            QApplication.setOverrideCursor(Qt.WaitCursor)
-            
-            import_results = self.db_manager.import_partite_from_csv(file_path, comune_id_selezionato, nome_comune_selezionato)
-            
-            # Crea una versione dei dati di successo adatta al dialogo generico
-            success_display_data = []
-            for row in import_results.get('success', []):
-                success_display_data.append({
-                    'id': row.get('id'),
-                    'nome_completo': f"Partita N.{row.get('numero_partita')} {row.get('suffisso_partita') or ''}".strip(),
-                    'comune_nome': row.get('comune_nome')
-                })
+            # PASSO 3: Setup interfaccia di attesa
+            self.progress_dialog = QProgressDialog("Importazione partite in corso, l'operazione potrebbe richiedere alcuni minuti...", None, 0, 0, self)
+            self.progress_dialog.setWindowTitle("Importazione CSV - Meridiana")
+            self.progress_dialog.setWindowModality(Qt.WindowModal)
+            self.progress_dialog.setCancelButton(None) # Disabilita l'annullamento per evitare corruzione
+            self.progress_dialog.show()
 
-            result_dialog = CSVImportResultDialog(
-                success_display_data,
-                import_results.get('errors', []),
-                self
+            # Inizializzazione del thread (notare 'partite' come parametro)
+            self.import_thread = CSVImportThread(
+                self.db_manager, 'partite', file_path, comune_id_selezionato, nome_comune_selezionato
             )
-            result_dialog.setWindowTitle("Riepilogo Importazione Partite")
-            result_dialog.exec_()
             
-            if self.elenco_comuni_widget_ref:
-                self.elenco_comuni_widget_ref.load_data() 
+            # Collegamento dei segnali
+            self.import_thread.finished_signal.connect(self._on_import_partite_finished)
+            self.import_thread.error_signal.connect(self._on_import_error) # Riutilizziamo lo slot degli errori già creato
+            
+            # Avvio dell'operazione asincrona
+            self.import_thread.start()
 
         except Exception as e:
-            self.logger.error(f"Errore imprevisto durante l'importazione CSV delle partite: {e}", exc_info=True)
-            QMessageBox.critical(self, "Errore Importazione", f"Si è verificato un errore non gestito: {e}")
-        finally:
-            QApplication.restoreOverrideCursor()
+            self.logger.error(f"Errore imprevisto durante la preparazione CSV delle partite: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore Importazione", f"Impossibile avviare l'importazione:\n{e}")
+
+    # --- NUOVO SLOT PER IL COMPLETAMENTO DELLE PARTITE ---
+    
+    def _on_import_partite_finished(self, import_results):
+        """Callback eseguita quando il thread delle partite termina con successo."""
+        # Chiude il popup di attesa
+        if hasattr(self, 'progress_dialog') and self.progress_dialog:
+            self.progress_dialog.close()
+            
+        # Formatta i dati di successo per adattarli al layout del CSVImportResultDialog
+        success_display_data = []
+        for row in import_results.get('success', []):
+            suffisso = row.get('suffisso_partita') or ''
+            nome_formattato = f"Partita N.{row.get('numero_partita')} {suffisso}".strip()
+            
+            success_display_data.append({
+                'id': row.get('id'),
+                'nome_completo': nome_formattato,
+                'comune_nome': row.get('comune_nome')
+            })
+
+        # Mostra la finestra di riepilogo
+        result_dialog = CSVImportResultDialog(
+            success_display_data,
+            import_results.get('errors', []),
+            self
+        )
+        result_dialog.setWindowTitle("Riepilogo Importazione Partite")
+        result_dialog.exec_()
+        
+        # Aggiorna la dashboard sottostante
+        if self.elenco_comuni_widget_ref:
+            self.elenco_comuni_widget_ref.load_data()
     def check_mv_refresh_status(self):
         """
         Controlla il timestamp dell'ultimo aggiornamento e mostra la barra di notifica se i dati sono obsoleti.
@@ -1465,74 +1529,88 @@ class CatastoMainWindow(QMainWindow):
             self.logger.error(f"Errore imprevisto durante l'apertura del manuale: {e}", exc_info=True)
             QMessageBox.critical(self, "Errore", f"Impossibile aprire il manuale:\n{e}")
             
+    def _esporta_log_sistema(self):
+        """Comprime e salva i file di log per l'assistenza tecnica."""
+        app_data_path = QStandardPaths.writableLocation(QStandardPaths.AppLocalDataLocation)
+        log_base_path = os.path.join(app_data_path, "meridiana_session.log")
+        
+        if not os.path.exists(log_base_path):
+            QMessageBox.warning(self, "Attenzione", "Nessun file di log trovato nel sistema.")
+            return
+
+        # Chiede all'utente dove salvare il file ZIP
+        save_path, _ = QFileDialog.getSaveFileName(
+            self, "Esporta Log per Assistenza", "Log_Meridiana_Assistenza.zip", "Archivio ZIP (*.zip)"
+        )
+        
+        if save_path:
+            try:
+                # Assicurati che l'estensione sia .zip
+                if not save_path.lower().endswith('.zip'):
+                    save_path += '.zip'
+                    
+                with zipfile.ZipFile(save_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                    # Aggiunge il log corrente
+                    zipf.write(log_base_path, os.path.basename(log_base_path))
+                    
+                    # Cerca e aggiunge eventuali log storici creati dalla rotazione (.1, .2, .3)
+                    for i in range(1, 4):
+                        old_log = f"{log_base_path}.{i}"
+                        if os.path.exists(old_log):
+                            zipf.write(old_log, os.path.basename(old_log))
+                            
+                QMessageBox.information(self, "Esportazione Completata", 
+                                        "I file di log sono stati salvati con successo.\n"
+                                        "Puoi inviare questo file ZIP al supporto tecnico.")
+                self.logger.info(f"Log di sistema esportati dall'utente in: {save_path}")
+            except Exception as e:
+                self.logger.error(f"Errore durante l'esportazione dei log: {e}", exc_info=True)
+                QMessageBox.critical(self, "Errore", f"Impossibile creare il file ZIP:\n{e}")
     def _show_backup_settings_dialog(self):
         dialog = BackupReminderSettingsDialog(self)
         dialog.exec_()
-
-
-
-def setup_logging():
-    """Configura il logging per scrivere nella cartella AppData dell'utente."""
-    # Imposta i metadati dell'applicazione per creare un percorso univoco
-    QCoreApplication.setOrganizationName("ArchivioDiStatoSavona")
-    QCoreApplication.setApplicationName("Meridiana")
-
-    # Trova la cartella standard e scrivibile per i dati dell'applicazione
-    app_data_path = QStandardPaths.writableLocation(QStandardPaths.AppLocalDataLocation)
-
-    # Assicurati che la cartella esista
-    os.makedirs(app_data_path, exist_ok=True)
-
-    # Percorso completo del file di log
-    log_file_path = os.path.join(app_data_path, "meridiana_session.log")
-
-    # Configura il logger principale (root logger)
-    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
-    logging.basicConfig(level=logging.INFO,
-                        format=log_format,
-                        handlers=[
-                            logging.FileHandler(log_file_path, mode='a', encoding='utf-8'),
-                            logging.StreamHandler(sys.stdout)
-                        ])
-
-    logging.info(f"Logging configurato. I log verranno salvati in: {log_file_path}")
-    
-# Inserisci questa funzione in gui_main.py
-
+  
 def setup_global_logging():
     """
     Configura il logging in modo centralizzato e sicuro, scrivendo i file
-    nella cartella AppData dell'utente, che e' sempre scrivibile.
+    nella cartella AppData dell'utente, con rotazione automatica.
     """
-    # Imposta i metadati necessari a PyQt per trovare il percorso corretto
     QCoreApplication.setOrganizationName("ArchivioDiStatoSavona")
     QCoreApplication.setApplicationName("Meridiana")
     
-    # Ottieni il percorso standard e scrivibile per i dati dell'applicazione
     app_data_path = QStandardPaths.writableLocation(QStandardPaths.AppLocalDataLocation)
-    
-    # Assicurati che la cartella esista
     os.makedirs(app_data_path, exist_ok=True)
     
-    # Percorso completo del file di log
     log_file_path = os.path.join(app_data_path, "meridiana_session.log")
     
-    # Configura il logger usando basicConfig, che pulisce ogni handler precedente.
-    # 'force=True' (per Python 3.8+) assicura che questa configurazione sovrascriva tutto.
+    # Configurazione del RotatingFileHandler
+    # maxBytes: 5 MB (5 * 1024 * 1024 byte)
+    # backupCount: 3 (mantiene log.1, log.2, log.3 prima di sovrascriverli)
+    file_handler = RotatingFileHandler(
+        log_file_path, 
+        mode='a', 
+        maxBytes=5 * 1024 * 1024, 
+        backupCount=3, 
+        encoding='utf-8'
+    )
+    
+    stream_handler = logging.StreamHandler(sys.stdout)
+    
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s',
-        handlers=[
-            logging.FileHandler(log_file_path, mode='a', encoding='utf-8'),
-            logging.StreamHandler(sys.stdout)
-        ],
+        handlers=[file_handler, stream_handler],
         force=True 
     )
     
-    logging.info(f"Logging configurato. I log verranno salvati in: {log_file_path}")
-
+    logging.info(f"Logging configurato con rotazione (Max 5MB, 3 file storici). I log verranno salvati in: {log_file_path}")
 def run_gui_app():
     try:
+        # --- AGGIUNTA QUI ---
+        # Abilita il ridimensionamento per schermi ad alta risoluzione (4K/Retina)
+        QCoreApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+        QCoreApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+        # --------------------
         app = QApplication(sys.argv)
         # --- INIZIO MODIFICA ---
         # Imposta i metadati dell'applicazione.
@@ -1706,6 +1784,11 @@ def run_gui_app():
             possible_manual_paths = [
                 os.path.join(base_dir, "resources", "manuale_utente.pdf")
             ]
+            
+        for path in possible_manual_paths:
+            if os.path.exists(path):
+                manuale_path = path
+                break
 
         welcome_screen = WelcomeScreen(parent=None, logo_path=logo_path, help_url=manuale_path)
         if welcome_screen.exec_() != QDialog.Accepted:

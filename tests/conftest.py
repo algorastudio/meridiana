@@ -13,7 +13,7 @@ def test_db_setup():
     """Fornisce i parametri di connessione al database di test."""
     return {
         'host': os.environ.get('DB_HOST', 'localhost'),
-        'dbname': os.environ.get('DB_NAME', 'catasto_storico'),
+        'dbname': os.environ.get('DB_NAME', 'catasto_test'),
         'user': os.environ.get('DB_USER', 'postgres'),
         'password': os.environ.get('DB_PASS', 'testpassword'),
         'port': os.environ.get('DB_PORT', '5432')
@@ -23,7 +23,8 @@ def test_db_setup():
 def db_manager(test_db_setup):
     """Inizializza il CatastoDBManager con i parametri di test."""
     manager = CatastoDBManager(**test_db_setup)
-    manager.initialize_main_pool()
+    if not manager.initialize_main_pool():
+        pytest.skip("Database di test non disponibile. Ignoro i test legati al DB.")
     yield manager
     manager.close_pool()
 

@@ -11,7 +11,7 @@ from typing import Optional, List, Dict, Any, Tuple, TYPE_CHECKING
 # Importazioni PyQt5
 from PyQt5.QtCore import (QDate, QDateTime, QPoint, QProcess, QSettings, 
                           QSize, QStandardPaths, Qt, QTimer, QUrl, 
-                          pyqtSignal)
+                          pyqtSignal, pyqtSlot)
 
 from PyQt5.QtGui import (QCloseEvent, QColor, QDesktopServices, QFont, 
                          QIcon, QPalette, QPixmap)
@@ -29,7 +29,6 @@ from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication,
                              QSpinBox, QStyle, QStyleFactory, QTabWidget,
                              QTableWidget, QTableWidgetItem, QTextEdit,
                              QVBoxLayout, QWidget)
-from PyQt5.QtCore import Qt, QSettings, pyqtSlot
 # Importazione commentata (da abilitare se necessario)
 # from PyQt5.QtSvgWidgets import QSvgWidget
 class ImmobiliTableWidget(QTableWidget):
@@ -80,10 +79,6 @@ class QPasswordLineEdit(QLineEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setEchoMode(QLineEdit.Password)
-# In custom_widgets.py
-
-import logging
-from PyQt5.QtWidgets import QWidget
 
 class LazyLoadedWidget(QWidget):
     """

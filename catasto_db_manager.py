@@ -48,7 +48,6 @@ from PyQt5.QtCore import (QDate, QDateTime, QPoint, QProcess, QSettings,
 COLONNE_POSSESSORI_DETTAGLI_NUM = 6 # Esempio: ID, Nome Compl, Cognome/Nome, Paternità, Quota, Titolo
 COLONNE_POSSESSORI_DETTAGLI_LABELS = ["ID Poss.", "Nome Completo", "Cognome Nome", "Paternità", "Quota", "Titolo"]
 
-import logging
 logger = logging.getLogger(__name__)
 # ------------ ECCEZIONI PERSONALIZZATE ------------
 class DBMError(Exception):
@@ -534,6 +533,59 @@ class CatastoDBManager:
                 logger.error(f"Errore Python generico in registra_comune_nel_db per '{nome}': {e}")
                 self.rollback()
                 return None
+    def get_partite_by_comune_paginate(self, comune_id: int, limit: int = 100, offset: int = 0, filter_text: Optional[str] = None) -> Tuple[List[Dict[str, Any]], int]:
+        """
+        Recupera le partite in modo paginato, restituendo anche il conteggio totale.
+        Ritorna una tupla: (lista_record_pagina, totale_record_trovati).
+        """
+        if not isinstance(comune_id, int) or comune_id <= 0:
+            raise DBDataError("ID comune non valido.")
+
+        # 1. Costruzione della clausola FROM e WHERE (condivisa tra COUNT e SELECT)
+        from_where_clause = f"FROM {self.schema}.partita p WHERE p.comune_id = %s"
+        params: List[Union[int, str]] = [comune_id]
+
+        # Applicazione dei filtri di ricerca, se presenti
+        if filter_text:
+            from_where_clause += " AND (CAST(p.numero_partita AS TEXT) ILIKE %s OR p.tipo ILIKE %s OR p.stato ILIKE %s OR p.suffisso_partita ILIKE %s)"
+            filter_like = f"%{filter_text}%"
+            params.extend([filter_like, filter_like, filter_like, filter_like])
+
+        # 2. Query per il CONTEGGIO TOTALE (ignora LIMIT e OFFSET)
+        count_query = f"SELECT COUNT(*) {from_where_clause}"
+
+        # 3. Query per i DATI PAGINATI (applica LIMIT, OFFSET e ORDER BY)
+        select_cols = f"""
+            SELECT
+                p.id, p.numero_partita, p.suffisso_partita, p.tipo, p.stato, p.data_impianto,
+                (SELECT COUNT(*) FROM {self.schema}.partita_possessore pp WHERE pp.partita_id = p.id) as num_possessori,
+                (SELECT COUNT(*) FROM {self.schema}.immobile i WHERE i.partita_id = p.id) as num_immobili,
+                (SELECT COUNT(*) FROM {self.schema}.documento_partita dp WHERE dp.partita_id = p.id) as num_documenti_allegati
+        """
+        data_query = f"{select_cols} {from_where_clause} ORDER BY p.numero_partita, p.suffisso_partita LIMIT %s OFFSET %s"
+        
+        # Aggiungiamo i parametri specifici per la paginazione alla query dei dati
+        data_params = params + [limit, offset]
+
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor(cursor_factory=DictCursor) as cur:
+                    # Esegui prima il conteggio totale
+                    cur.execute(count_query, tuple(params))
+                    total_count = cur.fetchone()[0]
+
+                    partite_list = []
+                    # Inutile interrogare i dati se il conteggio è zero
+                    if total_count > 0:
+                        cur.execute(data_query, tuple(data_params))
+                        partite_list = [dict(row) for row in cur.fetchall()]
+
+                    self.logger.info(f"Paginazione: estratti {len(partite_list)} record su un totale di {total_count} (Offset: {offset}).")
+                    return partite_list, total_count
+
+        except Exception as e:
+            self.logger.error(f"Errore DB in get_partite_by_comune_paginate: {e}", exc_info=True)
+            raise DBMError(f"Errore di sistema durante il recupero paginato delle partite: {e}") from e
     
     def get_comuni(self, search_term: Optional[str] = None) -> List[Dict[str, Any]]:
         query = f"SELECT id, nome, provincia, regione FROM {self.schema}.comune"
