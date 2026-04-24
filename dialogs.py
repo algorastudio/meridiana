@@ -3515,8 +3515,8 @@ class LocalitaSelectionDialog(QDialog):
         select_layout.addLayout(filter_layout)
 
         self.localita_table = QTableWidget()
-        self.localita_table.setColumnCount(4)
-        self.localita_table.setHorizontalHeaderLabels(["ID", "Nome", "Tipo", "Civico"])
+        self.localita_table.setColumnCount(3)
+        self.localita_table.setHorizontalHeaderLabels(["ID", "Nome", "Tipo"])
         self.localita_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.localita_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.localita_table.setSelectionMode(QTableWidget.SingleSelection)
@@ -3541,7 +3541,7 @@ class LocalitaSelectionDialog(QDialog):
             create_form_layout = QFormLayout(create_tab)
             self.nome_edit_nuova = QLineEdit()
             self.tipo_combo_nuova = QComboBox()
-            self.tipo_combo_nuova.addItems(["Regione", "Via", "Borgata", "Altro"])
+            self._popola_tipi_localita_combo()
             create_form_layout.addRow(QLabel("Nome località (*):"), self.nome_edit_nuova)
             create_form_layout.addRow(QLabel("Tipo (*):"), self.tipo_combo_nuova)
             self.btn_salva_nuova_localita = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton), "Salva Nuova Località")
@@ -3746,13 +3746,14 @@ class LocalitaSelectionDialog(QDialog):
 
         elif current_tab_index == 1 and not self.selection_mode: # Tab "Crea Nuova Località" (solo se in modalità gestione)
             nome = self.nome_edit_nuova.text().strip()
-            tipo = self.tipo_combo_nuova.currentText()
+            tipo_id = self.tipo_combo_nuova.currentData()
+            tipo_nome = self.tipo_combo_nuova.currentText()
 
             if not nome:
                 QMessageBox.warning(self, "Dati Mancanti", "Il nome della località è obbligatorio.")
                 self.nome_edit_nuova.setFocus()
                 return
-            if not tipo or tipo.strip() == "Seleziona Tipo...":
+            if tipo_id is None:
                 QMessageBox.warning(self, "Dati Mancanti", "Il tipo di località è obbligatorio.")
                 self.tipo_combo_nuova.setFocus()
                 return
@@ -3762,13 +3763,14 @@ class LocalitaSelectionDialog(QDialog):
 
             try:
                 localita_id_creata = self.db_manager.create_localita(
-                    self.comune_id, nome, tipo
+                    self.comune_id, nome, tipo_id
                 )
 
                 if localita_id_creata is not None:
                     self.selected_localita_id = localita_id_creata
                     self.selected_localita_name = nome
-                    self.selected_localita_name += f" ({tipo})"
+                    if tipo_nome:
+                        self.selected_localita_name += f" ({tipo_nome})"
 
                     QMessageBox.information(self, "Località Creata", f"Località '{self.selected_localita_name}' registrata con ID: {self.selected_localita_id}.")
                     self._pulisci_campi_creazione_localita() # Pulisce i campi del tab "Crea Nuova"
@@ -3793,6 +3795,25 @@ class LocalitaSelectionDialog(QDialog):
                 QMessageBox.warning(self, "Azione Non Disponibile", "La creazione di nuove località non è consentita in questa modalità di selezione.")
              else:
                 QMessageBox.warning(self, "Azione Non Valida", "Azione non riconosciuta per il tab corrente.")
+
+    def _popola_tipi_localita_combo(self):
+        """Popola il combo dei tipi di località dal DB, usando l'ID come userData."""
+        self.tipo_combo_nuova.clear()
+        try:
+            tipi = self.db_manager.get_tipi_localita()
+        except Exception as e:
+            self.logger.error(f"Errore caricamento tipi località: {e}", exc_info=True)
+            self.tipo_combo_nuova.addItem("Errore caricamento", None)
+            self.tipo_combo_nuova.setEnabled(False)
+            return
+        if not tipi:
+            self.tipo_combo_nuova.addItem("Nessuna tipologia definita", None)
+            self.tipo_combo_nuova.setEnabled(False)
+            return
+        self.tipo_combo_nuova.addItem("--- Seleziona Tipo ---", None)
+        for tipo in tipi:
+            self.tipo_combo_nuova.addItem(tipo['nome'], tipo['id'])
+        self.tipo_combo_nuova.setEnabled(True)
 
     def _pulisci_campi_creazione_localita(self):
         self.nome_edit_nuova.clear()
@@ -4750,8 +4771,8 @@ class LocalitaSelectionDialog(QDialog):
         select_layout.addLayout(filter_layout)
 
         self.localita_table = QTableWidget()
-        self.localita_table.setColumnCount(4)
-        self.localita_table.setHorizontalHeaderLabels(["ID", "Nome", "Tipo", "Civico"])
+        self.localita_table.setColumnCount(3)
+        self.localita_table.setHorizontalHeaderLabels(["ID", "Nome", "Tipo"])
         self.localita_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.localita_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.localita_table.setSelectionMode(QTableWidget.SingleSelection)
@@ -4776,7 +4797,7 @@ class LocalitaSelectionDialog(QDialog):
             create_form_layout = QFormLayout(create_tab)
             self.nome_edit_nuova = QLineEdit()
             self.tipo_combo_nuova = QComboBox()
-            self.tipo_combo_nuova.addItems(["Regione", "Via", "Borgata", "Altro"])
+            self._popola_tipi_localita_combo()
             create_form_layout.addRow(QLabel("Nome località (*):"), self.nome_edit_nuova)
             create_form_layout.addRow(QLabel("Tipo (*):"), self.tipo_combo_nuova)
             self.btn_salva_nuova_localita = QPushButton(QApplication.style().standardIcon(QStyle.SP_DialogSaveButton), "Salva Nuova Località")
@@ -4978,13 +4999,14 @@ class LocalitaSelectionDialog(QDialog):
 
         elif current_tab_index == 1 and not self.selection_mode: # Tab "Crea Nuova Località" (solo se in modalità gestione)
             nome = self.nome_edit_nuova.text().strip()
-            tipo = self.tipo_combo_nuova.currentText()
+            tipo_id = self.tipo_combo_nuova.currentData()
+            tipo_nome = self.tipo_combo_nuova.currentText()
 
             if not nome:
                 QMessageBox.warning(self, "Dati Mancanti", "Il nome della località è obbligatorio.")
                 self.nome_edit_nuova.setFocus()
                 return
-            if not tipo or tipo.strip() == "Seleziona Tipo...":
+            if tipo_id is None:
                 QMessageBox.warning(self, "Dati Mancanti", "Il tipo di località è obbligatorio.")
                 self.tipo_combo_nuova.setFocus()
                 return
@@ -4994,13 +5016,14 @@ class LocalitaSelectionDialog(QDialog):
 
             try:
                 localita_id_creata = self.db_manager.create_localita(
-                    self.comune_id, nome, tipo
+                    self.comune_id, nome, tipo_id
                 )
 
                 if localita_id_creata is not None:
                     self.selected_localita_id = localita_id_creata
                     self.selected_localita_name = nome
-                    self.selected_localita_name += f" ({tipo})"
+                    if tipo_nome:
+                        self.selected_localita_name += f" ({tipo_nome})"
 
                     QMessageBox.information(self, "Località Creata", f"Località '{self.selected_localita_name}' registrata con ID: {self.selected_localita_id}.")
                     self._pulisci_campi_creazione_localita() # Pulisce i campi del tab "Crea Nuova"
@@ -5025,6 +5048,25 @@ class LocalitaSelectionDialog(QDialog):
                 QMessageBox.warning(self, "Azione Non Disponibile", "La creazione di nuove località non è consentita in questa modalità di selezione.")
              else:
                 QMessageBox.warning(self, "Azione Non Valida", "Azione non riconosciuta per il tab corrente.")
+
+    def _popola_tipi_localita_combo(self):
+        """Popola il combo dei tipi di località dal DB, usando l'ID come userData."""
+        self.tipo_combo_nuova.clear()
+        try:
+            tipi = self.db_manager.get_tipi_localita()
+        except Exception as e:
+            self.logger.error(f"Errore caricamento tipi località: {e}", exc_info=True)
+            self.tipo_combo_nuova.addItem("Errore caricamento", None)
+            self.tipo_combo_nuova.setEnabled(False)
+            return
+        if not tipi:
+            self.tipo_combo_nuova.addItem("Nessuna tipologia definita", None)
+            self.tipo_combo_nuova.setEnabled(False)
+            return
+        self.tipo_combo_nuova.addItem("--- Seleziona Tipo ---", None)
+        for tipo in tipi:
+            self.tipo_combo_nuova.addItem(tipo['nome'], tipo['id'])
+        self.tipo_combo_nuova.setEnabled(True)
 
     def _pulisci_campi_creazione_localita(self):
         self.nome_edit_nuova.clear()

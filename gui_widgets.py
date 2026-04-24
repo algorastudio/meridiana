@@ -1842,19 +1842,24 @@ class InserimentoLocalitaWidget(QWidget):
             QMessageBox.critical(self, "Errore Inserimento", str(e))
 
     def refresh_localita(self):
-        # ... (questo metodo rimane quasi identico, ma deve recuperare il nome del tipo)
         self.localita_table.setRowCount(0)
-        if not self.comune_id: return
+        if not self.comune_id:
+            return
 
         try:
-            # get_localita_by_comune ora deve fare un JOIN per prendere il nome del tipo
             localita_list = self.db_manager.get_localita_by_comune(self.comune_id)
-            # ... (popola la tabella, assicurati che la query restituisca il nome del tipo, non l'id)
-            # Se la query db non è stata modificata, la colonna "tipo" conterrà l'ID.
-            # Per ora, la lasciamo così, ma l'ideale sarebbe aggiornare la query.
+            if not localita_list:
+                return
+            self.localita_table.setRowCount(len(localita_list))
+            for i, loc in enumerate(localita_list):
+                self.localita_table.setItem(i, 0, QTableWidgetItem(str(loc.get('id', ''))))
+                self.localita_table.setItem(i, 1, QTableWidgetItem(loc.get('nome', '') or ''))
+                self.localita_table.setItem(i, 2, QTableWidgetItem(loc.get('tipo', '') or ''))
+            self.localita_table.resizeColumnsToContents()
         except Exception as e:
-            # ...
-            pass
+            logging.getLogger("CatastoGUI").error(
+                f"Errore caricamento località per comune ID {self.comune_id}: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore", f"Impossibile caricare le località:\n{e}")
 
 class InserimentoPartitaWidget(QWidget):
     import_csv_requested = pyqtSignal()
