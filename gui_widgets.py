@@ -2,14 +2,18 @@
 import os,csv,sys,logging,json
 from datetime import date, datetime
 from typing import Optional, List, Dict, Any, Tuple, TYPE_CHECKING
-from app_utils import BulkReportPDF, FPDF_AVAILABLE, _get_default_export_path, prompt_to_open_file
+from app_utils import (BulkReportPDF, FPDF_AVAILABLE, _get_default_export_path, 
+                       prompt_to_open_file, gui_esporta_partita_pdf, gui_esporta_partita_json, 
+                       gui_esporta_partita_csv, gui_esporta_possessore_pdf, 
+                       gui_esporta_possessore_json, gui_esporta_possessore_csv,
+                       GenericTextReportPDF, is_file_locked, get_alternative_filename)
 import pandas as pd # Importa pandas
 
 # Importazioni PyQt5
 from PyQt5.QtCore import (QDate, QDateTime, QPoint, QProcess, QSettings, 
                           QSize, QStandardPaths, Qt, QTimer, QUrl, 
-                          pyqtSignal,QModelIndex,QProcessEnvironment,Qt, QSettings, 
-                          pyqtSlot,pyqtSignal ,QThread)
+                          pyqtSignal, QModelIndex, QProcessEnvironment, 
+                          pyqtSlot, QThread)
 
 from PyQt5.QtGui import (QCloseEvent, QColor, QDesktopServices, QFont, 
                          QIcon, QPalette, QPixmap)
@@ -34,33 +38,21 @@ from config import (
     COLONNE_POSSESSORI_DETTAGLI_NUM ,COLONNE_POSSESSORI_DETTAGLI_LABELS,COLONNE_VISUALIZZAZIONE_POSSESSORI_NUM,
     COLONNE_VISUALIZZAZIONE_POSSESSORI_LABELS, COLONNE_INSERIMENTO_POSSESSORI_NUM, COLONNE_INSERIMENTO_POSSESSORI_LABELS,
     NUOVE_ETICHETTE_POSSESSORI)
-from dialogs import ( ModificaPossessoreDialog, PartiteComuneDialog, ModificaImmobileDialog,
+from dialogs import (ModificaPossessoreDialog, PartiteComuneDialog, ModificaImmobileDialog,
                      PossessoriComuneDialog, LocalitaSelectionDialog, ModificaComuneDialog, 
-                     PartitaDetailsDialog, CreateUserDialog,ModificaLocalitaDialog,PeriodoStoricoEditDialog, 
-                     CreatePossessoreDialog)
-from custom_widgets import LazyLoadedWidget
+                     PartitaDetailsDialog, CreateUserDialog, ModificaLocalitaDialog, PeriodoStoricoEditDialog, 
+                     CreatePossessoreDialog, DBConfigDialog, DocumentViewerDialog, PeriodoStoricoDetailsDialog,
+                     ComuneSelectionDialog, PartitaSearchDialog, PossessoreSelectionDialog, ImmobileDialog, 
+                     DettagliLegamePossessoreDialog, UserSelectionDialog, qdate_to_datetime, datetime_to_qdate,
+                     _hash_password, _verify_password)
+from custom_widgets import QPasswordLineEdit, ImmobiliTableWidget, LazyLoadedWidget
 
 # Ottieni un logger specifico per questo modulo.
 logger = logging.getLogger("CatastoGUI.gui_widgets")
-# In gui_main.py, dopo le importazioni PyQt e standard:
-# E le sue eccezioni se servono qui
+
 if TYPE_CHECKING:
-    # Questa importazione avviene solo per i type checker (es. MyPy), 
-    # non a runtime, quindi non crea il ciclo.
     from gui_main import CatastoMainWindow 
-    from catasto_db_manager import CatastoDBManager # Se serve anche per type hint
-
-# In gui_widgets.py, dopo le importazioni PyQt e standard:
-from custom_widgets import QPasswordLineEdit, LazyLoadedWidget
-from dialogs import (DBConfigDialog,DocumentViewerDialog, ModificaPossessoreDialog, PartiteComuneDialog, ModificaImmobileDialog,
-                    PossessoriComuneDialog, LocalitaSelectionDialog, ModificaComuneDialog,PeriodoStoricoDetailsDialog,
-                    PartitaDetailsDialog,CreateUserDialog)
-from dialogs import (ComuneSelectionDialog, PartitaSearchDialog, PossessoreSelectionDialog, ImmobileDialog,LocalitaSelectionDialog, 
-                    DettagliLegamePossessoreDialog, UserSelectionDialog,qdate_to_datetime, datetime_to_qdate,_hash_password,_verify_password)
-
-from app_utils import (gui_esporta_partita_pdf, gui_esporta_partita_json, gui_esporta_partita_csv,
-                       gui_esporta_possessore_pdf, gui_esporta_possessore_json, gui_esporta_possessore_csv,
-                       GenericTextReportPDF,FPDF_AVAILABLE, is_file_locked,get_alternative_filename)
+    from catasto_db_manager import CatastoDBManager
 # È possibile che alcune utility (es. hashing) siano usate da dialoghi che ora sono in gui_main.py
 # In tal caso, gui_main.py importerà _hash_password da app_utils.py.
 
@@ -435,12 +427,51 @@ class RicercaPartiteWidget(QWidget):
     def __init__(self, db_manager, parent=None):
         super(RicercaPartiteWidget, self).__init__(parent)
         self.db_manager = db_manager
+        
+        # Variabili di stato per la paginazione (aggiungi nell'__init__)
+        self.current_page = 1
+        self.page_size = 50
+        self.total_records = 0
 
         layout = QVBoxLayout()
 
         # Criteri di ricerca
         criteria_group = QGroupBox("Criteri di Ricerca")
         criteria_layout = QGridLayout()
+        self.current_page = 1
+        self.page_size = 50  # Numero di record per pagina
+        self.total_records = 0
+        # --- PANNELLO DI PAGINAZIONE ---
+        self.pagination_layout = QHBoxLayout()
+        
+        self.btn_prev_page = QPushButton("◄ Precedente")
+        self.btn_prev_page.clicked.connect(self._prev_page)
+        
+        self.lbl_page_info = QLabel("Pagina 1 di 1")
+        self.lbl_page_info.setAlignment(Qt.AlignCenter)
+        
+        # Tendina per la scelta dinamica del limite
+        self.combo_page_size = QComboBox()
+        self.combo_page_size.addItems(["25", "50", "100", "500"])
+        self.combo_page_size.setCurrentText("50")
+        self.combo_page_size.currentTextChanged.connect(self._change_page_size)
+        
+        self.btn_next_page = QPushButton("Successiva ►")
+        self.btn_next_page.clicked.connect(self._next_page)
+        
+        self.pagination_layout.addStretch()
+        self.pagination_layout.addWidget(self.btn_prev_page)
+        self.pagination_layout.addWidget(self.lbl_page_info)
+        self.pagination_layout.addSpacing(20)
+        self.pagination_layout.addWidget(QLabel("Record per pagina:"))
+        self.pagination_layout.addWidget(self.combo_page_size)
+        self.pagination_layout.addWidget(self.btn_next_page)
+        self.pagination_layout.addStretch()
+        
+        # Aggiunge il pannello al layout principale del widget
+        layout.addLayout(self.pagination_layout) 
+        # (NB: se il tuo layout principale si chiama diversamente, usa il nome corretto es. self.main_layout)
+        
 
         # Comune
         comune_label = QLabel("Comune:")
@@ -513,6 +544,72 @@ class RicercaPartiteWidget(QWidget):
         layout.addWidget(results_group)
 
         self.setLayout(layout)
+    def load_data(self):
+        """Carica i dati della tabella applicando la paginazione e i filtri testuali."""
+        # Se non hai un comune selezionato, interrompi
+        if not hasattr(self, 'comune_selezionato_id') or not self.comune_selezionato_id:
+            return
+
+        # Calcolo dell'offset per il DB
+        offset = (self.current_page - 1) * self.page_size
+        filtro = self.input_ricerca.text().strip() if hasattr(self, 'input_ricerca') else None
+
+        try:
+            # Chiama la nuova funzione paginata in CatastoDBManager
+            partite, totale = self.db_manager.get_partite_by_comune_paginate(
+                comune_id=self.comune_selezionato_id,
+                limit=self.page_size,
+                offset=offset,
+                filter_text=filtro if filtro else None
+            )
+            
+            self.total_records = totale
+            
+            # Pulisce la tabella
+            self.table_partite.setRowCount(0)
+            
+            # Inserisce i nuovi dati (mantieni la tua logica di inserimento celle qui)
+            for row_idx, partita in enumerate(partite):
+                self.table_partite.insertRow(row_idx)
+                
+                # Esempio: self.table_partite.setItem(row_idx, 0, QTableWidgetItem(str(partita['numero_partita'])))
+                # ... (usa il tuo attuale codice di riempimento celle) ...
+                
+            self._update_pagination_ui()
+            
+        except Exception as e:
+            self.logger.error(f"Errore durante il caricamento paginato delle partite: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore", f"Impossibile caricare i dati:\n{e}")
+
+    def _update_pagination_ui(self):
+        """Aggiorna l'etichetta e disabilita/abilita i pulsanti in base ai limiti."""
+        import math
+        total_pages = max(1, math.ceil(self.total_records / self.page_size))
+        
+        self.lbl_page_info.setText(f"Pagina {self.current_page} di {total_pages} (Totale: {self.total_records})")
+        
+        self.btn_prev_page.setEnabled(self.current_page > 1)
+        self.btn_next_page.setEnabled(self.current_page < total_pages)
+
+    def _prev_page(self):
+        """Passa alla pagina precedente e ricarica."""
+        if self.current_page > 1:
+            self.current_page -= 1
+            self.load_data()
+
+    def _next_page(self):
+        """Passa alla pagina successiva e ricarica."""
+        import math
+        total_pages = math.ceil(self.total_records / self.page_size)
+        if self.current_page < total_pages:
+            self.current_page += 1
+            self.load_data()
+
+    def _change_page_size(self, new_size_str):
+        """Cambiando i record per pagina, si resetta alla pagina 1."""
+        self.page_size = int(new_size_str)
+        self.current_page = 1
+        self.load_data()
 
     def select_comune(self):
         """Apre il selettore di comuni."""
@@ -606,6 +703,16 @@ class RicercaPartiteWidget(QWidget):
             QMessageBox.critical(
                 self, "Errore di Ricerca", f"Si è verificato un errore imprevisto durante la ricerca: {e}")
 
+    def vai_a_pagina_precedente(self):
+        if self.current_page > 1:
+            self.current_page -= 1
+            self.load_data()
+
+    def vai_a_pagina_successiva(self):
+        total_pages = (self.total_records + self.page_size - 1) // self.page_size
+        if self.current_page < total_pages:
+            self.current_page += 1
+            self.load_data()
     def show_details(self):
         """Mostra i dettagli della partita selezionata."""
         # Ottiene l'ID della partita selezionata
@@ -1068,8 +1175,22 @@ class InserimentoComuneWidget(LazyLoadedWidget): # Eredita da LazyLoadedWidget
         data_ist = self.data_istituzione_edit.date().toPyDate() if self.data_istituzione_check.isChecked() else None
         data_sopp = self.data_soppressione_edit.date().toPyDate() if self.data_soppressione_check.isChecked() else None
 
-        if not all([nome_comune, provincia, regione]):
-            QMessageBox.warning(self, "Dati Mancanti", "Nome, Provincia e Regione sono campi obbligatori.")
+        if not nome_comune:
+            QMessageBox.warning(self, "Dati Mancanti", "Il nome del comune è obbligatorio.")
+            self.nome_comune_edit.setFocus()
+            return
+        if not provincia:
+            QMessageBox.warning(self, "Dati Mancanti", "La provincia è obbligatoria.")
+            self.provincia_edit.setFocus()
+            return
+        if not regione:
+            QMessageBox.warning(self, "Dati Mancanti", "La regione è obbligatoria.")
+            self.regione_edit.setFocus()
+            return
+
+        if data_ist and data_sopp and data_sopp < data_ist:
+            QMessageBox.warning(self, "Date Non Valide", "La data di soppressione non può essere precedente alla data di istituzione.")
+            self.data_soppressione_edit.setFocus()
             return
 
         username_per_log = self.utente_attuale_info.get('username', 'utente_sconosciuto') if self.utente_attuale_info else 'utente_sconosciuto'
@@ -1696,17 +1817,20 @@ class InserimentoLocalitaWidget(QWidget):
 
     def create_localita(self):
         if not self.comune_id:
-            QMessageBox.warning(self, "Errore", "Seleziona un comune.")
+            QMessageBox.warning(self, "Errore", "Seleziona un comune prima di inserire una località.")
+            self.comune_button.setFocus()
             return
 
         nome = self.nome_edit.text().strip()
         tipo_id = self.tipo_combo.currentData()
 
         if not nome:
-            QMessageBox.warning(self, "Errore", "Il nome della località è obbligatorio.")
+            QMessageBox.warning(self, "Dati Mancanti", "Il nome della località è obbligatorio.")
+            self.nome_edit.setFocus()
             return
         if tipo_id is None:
-            QMessageBox.warning(self, "Errore", "Selezionare una tipologia valida.")
+            QMessageBox.warning(self, "Dati Mancanti", "Selezionare una tipologia valida.")
+            self.tipo_combo.setFocus()
             return
 
         try:
@@ -1718,19 +1842,24 @@ class InserimentoLocalitaWidget(QWidget):
             QMessageBox.critical(self, "Errore Inserimento", str(e))
 
     def refresh_localita(self):
-        # ... (questo metodo rimane quasi identico, ma deve recuperare il nome del tipo)
         self.localita_table.setRowCount(0)
-        if not self.comune_id: return
+        if not self.comune_id:
+            return
 
         try:
-            # get_localita_by_comune ora deve fare un JOIN per prendere il nome del tipo
             localita_list = self.db_manager.get_localita_by_comune(self.comune_id)
-            # ... (popola la tabella, assicurati che la query restituisca il nome del tipo, non l'id)
-            # Se la query db non è stata modificata, la colonna "tipo" conterrà l'ID.
-            # Per ora, la lasciamo così, ma l'ideale sarebbe aggiornare la query.
+            if not localita_list:
+                return
+            self.localita_table.setRowCount(len(localita_list))
+            for i, loc in enumerate(localita_list):
+                self.localita_table.setItem(i, 0, QTableWidgetItem(str(loc.get('id', ''))))
+                self.localita_table.setItem(i, 1, QTableWidgetItem(loc.get('nome', '') or ''))
+                self.localita_table.setItem(i, 2, QTableWidgetItem(loc.get('tipo', '') or ''))
+            self.localita_table.resizeColumnsToContents()
         except Exception as e:
-            # ...
-            pass
+            logging.getLogger("CatastoGUI").error(
+                f"Errore caricamento località per comune ID {self.comune_id}: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore", f"Impossibile caricare le località:\n{e}")
 
 class InserimentoPartitaWidget(QWidget):
     import_csv_requested = pyqtSignal()
@@ -1889,11 +2018,19 @@ class InserimentoPartitaWidget(QWidget):
         comune_id = self.comune_combo.currentData()
         if not comune_id:
             QMessageBox.warning(self, "Dati Mancanti", "È necessario selezionare un comune.")
+            self.comune_combo.setFocus()
             return
 
         # Recupera i dati dai campi, inclusi i nuovi
+        data_impianto = self.data_impianto_edit.date().toPyDate()
         data_chiusura = self.data_chiusura_edit.date().toPyDate() if self.data_chiusura_check.isChecked() else None
         numero_provenienza = self.numero_provenienza_edit.text().strip() or None
+
+        # Validazione temporale prima di inviare al DB
+        if data_chiusura and data_chiusura < data_impianto:
+            QMessageBox.warning(self, "Date Non Valide", "La data di chiusura non può essere precedente alla data di impianto.")
+            self.data_chiusura_edit.setFocus()
+            return
 
         try:
             new_id = self.db_manager.create_partita(
@@ -1901,10 +2038,10 @@ class InserimentoPartitaWidget(QWidget):
                 numero_partita=self.numero_partita_spin.value(),
                 tipo=self.tipo_combo.currentText(),
                 stato=self.stato_combo.currentText(),
-                data_impianto=self.data_impianto_edit.date().toPyDate(),
+                data_impianto=data_impianto,
                 suffisso_partita=self.suffisso_edit.text().strip() or None,
-                data_chiusura=data_chiusura, # Passa il nuovo valore
-                numero_provenienza=numero_provenienza # Passa il nuovo valore
+                data_chiusura=data_chiusura,
+                numero_provenienza=numero_provenienza
             )
             QMessageBox.information(self, "Successo", f"Partita creata con successo con ID: {new_id}.")
             self._pulisci_campi()
@@ -3312,6 +3449,15 @@ class OperazioniPartitaWidget(QWidget):
             self.pp_data_contratto_edit.setFocus()
             return
         data_contratto = data_contratto_q.toPyDate()
+        
+        # Spesso il contratto precede o coincide con la variazione catastale
+        if data_contratto > data_variazione:
+            reply = QMessageBox.warning(self, "Attenzione Date", 
+                                        "La Data dell'Atto/Contratto inserita è successiva alla Data di Variazione Catastale.\n\nÈ corretto?",
+                                        QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if reply == QMessageBox.No:
+                self.pp_data_contratto_edit.setFocus()
+                return
 
         # Altri campi opzionali
         notaio = self.pp_notaio_edit.text().strip() or None
@@ -4291,9 +4437,6 @@ class ReportisticaWidget(LazyLoadedWidget):
 
 # In gui_widgets.py, SOSTITUISCI l'intera classe StatisticheWidget con questa
 
-# Assicurati che LazyLoadedWidget sia importato da custom_widgets
-from custom_widgets import LazyLoadedWidget 
-from dialogs import ComuneSelectionDialog # Assicurati che sia importato
 
 class StatisticheWidget(LazyLoadedWidget):
     def __init__(self, db_manager, parent=None):
@@ -5173,7 +5316,6 @@ class AuditLogViewerWidget(LazyLoadedWidget):
         filename, _ = QFileDialog.getSaveFileName(self, "Esporta Log in Excel", f"audit_log_{date.today()}.xlsx", "File Excel (*.xlsx)")
         if not filename: return
         try:
-            import pandas as pd
             df = pd.DataFrame(logs); df.to_excel(filename, index=False, engine='openpyxl')
             QMessageBox.information(self, "Successo", f"{len(logs)} record di audit esportati in Excel.")
         except ImportError: QMessageBox.critical(self, "Libreria Mancante", "L'esportazione in Excel richiede 'pandas' e 'openpyxl'.")
