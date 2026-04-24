@@ -45,21 +45,29 @@ SELECT COUNT(*) AS num_comuni FROM catasto.comune;
 
 -- ========================================================================
 -- STEP 2: Inserimento ~20.000 possessori distribuiti sui comuni
+-- Usa ROW_NUMBER() per mappare n → id reale del comune
+-- (gli id dei comuni possono essere >100 se la sequence è avanzata)
 -- ========================================================================
+WITH comuni_numerati AS (
+    SELECT id, (ROW_NUMBER() OVER (ORDER BY id) - 1) AS rn
+    FROM catasto.comune
+),
+tot AS (SELECT COUNT(*)::INT AS n_comuni FROM catasto.comune)
 INSERT INTO catasto.possessore (comune_id, cognome_nome, paternita, nome_completo, attivo)
 SELECT
-    -- distribuzione circolare sui comuni
-    1 + ((g.n - 1) % (SELECT COUNT(*) FROM catasto.comune)) AS comune_id,
-    cognomi[1 + ((g.n - 1) % 10)] || ' ' || nomi[1 + ((g.n - 1) % 10)] AS cognome_nome,
+    c.id AS comune_id,
+    arr.cognomi[1 + ((g.n - 1) % 10)] || ' ' || arr.nomi[1 + ((g.n - 1) % 10)] AS cognome_nome,
     CASE
-        WHEN g.n % 5 = 0 THEN 'fu ' || nomi[1 + ((g.n + 3) % 10)]
-        WHEN g.n % 5 = 1 THEN 'di ' || nomi[1 + ((g.n + 7) % 10)]
+        WHEN g.n % 5 = 0 THEN 'fu ' || arr.nomi[1 + ((g.n + 3) % 10)]
+        WHEN g.n % 5 = 1 THEN 'di ' || arr.nomi[1 + ((g.n + 7) % 10)]
         ELSE NULL
     END AS paternita,
-    cognomi[1 + ((g.n - 1) % 10)] || ' ' || nomi[1 + ((g.n - 1) % 10)]
+    arr.cognomi[1 + ((g.n - 1) % 10)] || ' ' || arr.nomi[1 + ((g.n - 1) % 10)]
         || ' (' || LPAD(g.n::TEXT, 5, '0') || ')' AS nome_completo,
     (g.n % 100) < 95 AS attivo
 FROM generate_series(1, 20000) g(n)
+CROSS JOIN tot
+JOIN comuni_numerati c ON c.rn = ((g.n - 1) % tot.n_comuni)
 CROSS JOIN (
     SELECT
         ARRAY['Rossi','Bianchi','Verdi','Neri','Russo','Ferrari','Esposito','Gallo','Conti','Rizzo'] AS cognomi,
@@ -90,7 +98,7 @@ CROSS JOIN (
             'Lecce','Foggia','Pisa'
         ] AS nomi_strade
 ) arr
-ON CONFLICT (comune_id, nome, civico) DO NOTHING;
+ON CONFLICT (comune_id, nome) DO NOTHING;
 
 SELECT COUNT(*) AS num_localita FROM catasto.localita;
 
