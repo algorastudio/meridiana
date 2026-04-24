@@ -78,26 +78,36 @@ SELECT COUNT(*) AS num_possessori FROM catasto.possessore;
 
 -- ========================================================================
 -- STEP 3: Inserimento 4 localita per comune (~400)
+-- tipo_id è NOT NULL e FK a tipo_localita (Regione/Via/Borgata/Altro)
 -- ========================================================================
-INSERT INTO catasto.localita (comune_id, nome, tipologia_stradale)
+-- Assicura l'esistenza dei tipi di default (idempotente)
+INSERT INTO catasto.tipo_localita (nome) VALUES
+    ('Regione'), ('Via'), ('Borgata'), ('Altro')
+ON CONFLICT (nome) DO NOTHING;
+
+INSERT INTO catasto.localita (comune_id, nome, tipologia_stradale, tipo_id)
 SELECT
     c.id AS comune_id,
-    tipi[1 + ((s.idx - 1) % 3)] || ' ' || nomi_strade[1 + ((c.id + s.idx - 1) % 30)]
+    arr.tipi_descr[1 + ((s.idx - 1) % 3)] || ' ' || arr.nomi_strade[1 + ((c.id + s.idx - 1) % 30)]
         || CASE WHEN s.idx > 3 THEN ' ' || s.idx::TEXT ELSE '' END AS nome,
-    tipi[1 + ((s.idx - 1) % 3)] AS tipologia_stradale
+    arr.tipi_descr[1 + ((s.idx - 1) % 3)] AS tipologia_stradale,
+    tl.id AS tipo_id
 FROM catasto.comune c
 CROSS JOIN generate_series(1, 4) s(idx)
 CROSS JOIN (
     SELECT
-        ARRAY['Via','Piazza','Corso'] AS tipi,
+        ARRAY['Via','Piazza','Corso'] AS tipi_descr,
         ARRAY[
             'Roma','Milano','Torino','Genova','Venezia','Firenze','Napoli',
             'Bari','Palermo','Bologna','Verona','Messina','Padova','Trieste',
             'Brescia','Perugia','Ravenna','Livorno','Taranto','Reggio Calabria',
             'Ancona','Parma','L''Aquila','Alessandria','Monza','Asti','Como',
             'Lecce','Foggia','Pisa'
-        ] AS nomi_strade
+        ] AS nomi_strade,
+        -- Mappa s.idx -> uno dei tipi di tipo_localita
+        ARRAY['Via','Borgata','Regione','Altro'] AS tipi_fk
 ) arr
+JOIN catasto.tipo_localita tl ON tl.nome = arr.tipi_fk[1 + ((s.idx - 1) % 4)]
 ON CONFLICT (comune_id, nome) DO NOTHING;
 
 SELECT COUNT(*) AS num_localita FROM catasto.localita;
