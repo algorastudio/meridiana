@@ -37,7 +37,7 @@ from catasto_db_manager import CatastoDBManager
 from app_utils import get_local_ip_address, get_password_from_keyring 
 import pandas as pd # Importa pandas
 from app_paths import get_available_styles, load_stylesheet, get_logo_path, get_resource_path
-from dialogs import CSVImportResultDialog, DBConfigDialog, BackupReminderSettingsDialog
+from dialogs import CSVImportResultDialog, DBConfigDialog, BackupReminderSettingsDialog, EulaDialog
 
 
 # Dai nuovi moduli che creeremo:
@@ -48,7 +48,7 @@ from gui_widgets import (
     OperazioniPartitaWidget, EsportazioniWidget, ReportisticaWidget, StatisticheWidget,
     GestioneUtentiWidget, AuditLogViewerWidget, BackupWidget, 
     RegistraConsultazioneWidget, WelcomeScreen  , RicercaPartiteWidget,GestionePeriodiStoriciWidget ,
-    GestioneTipiLocalitaWidget, GestioneTitoliPossessoWidget, InserimentoPartitaWidget, EulaDialog)
+    GestioneTipiLocalitaWidget, GestioneTitoliPossessoWidget, InserimentoPartitaWidget)
 
 from custom_widgets import QPasswordLineEdit
 
