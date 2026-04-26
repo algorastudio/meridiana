@@ -324,6 +324,52 @@ class CatastoMainWindow(QMainWindow):
         # --- FINE CORREZIONE DEFINITIVA ---
 
         self.initUI()
+        self.restore_window_state()
+        self.setup_shortcuts()
+        self.start_connection_watchdog()
+
+    def setup_shortcuts(self):
+        """Configura le scorciatoie da tastiera globali."""
+        from PyQt5.QtWidgets import QShortcut
+        from PyQt5.QtGui import QKeySequence
+        
+        # Ctrl+F: Vai al tab Ricerca
+        self.search_shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
+        self.search_shortcut.activated.connect(lambda: self.activate_tab_by_name("Ricerca"))
+        
+        # F1: Apri Manuale
+        self.help_shortcut = QShortcut(QKeySequence("F1"), self)
+        self.help_shortcut.activated.connect(self._apri_manuale_utente)
+
+    def activate_tab_by_name(self, name_part: str):
+        """Attiva un tab principale in base a una parte del nome."""
+        for i in range(self.tabs.count()):
+            if name_part.lower() in self.tabs.tabText(i).lower():
+                self.tabs.setCurrentIndex(i)
+                break
+
+    def start_connection_watchdog(self):
+        """Avvia un timer per verificare la connessione al DB periodicamente."""
+        from PyQt5.QtCore import QTimer
+        self.watchdog_timer = QTimer(self)
+        self.watchdog_timer.timeout.connect(self.check_db_connection_status)
+        self.watchdog_timer.start(30000) # Controlla ogni 30 secondi
+
+    def check_db_connection_status(self):
+        """Verifica se il pool è ancora attivo e il DB risponde."""
+        if self.db_manager and self.db_manager.pool:
+            # Nota: richiede check_connection_alive implementato nel DBManager
+            is_alive = getattr(self.db_manager, 'check_connection_alive', lambda: True)()
+            if not is_alive:
+                self.db_status_label.setText("Database: DISCONNESSO!")
+                self.db_status_label.setStyleSheet("color: white; background-color: #D8000C; font-weight: bold; padding: 2px; border-radius: 3px;")
+                self.statusBar().showMessage("ATTENZIONE: Connessione al database interrotta.")
+            else:
+                if "DISCONNESSO" in self.db_status_label.text():
+                    db_name = self.db_manager.get_current_dbname() or "N/D"
+                    self.db_status_label.setText(f"Database: Connesso ({db_name})")
+                    self.db_status_label.setStyleSheet("")
+
         
     def initUI(self):
         # Inizializzazione dei QTabWidget per i sotto-tab se si usa questa organizzazione
@@ -851,7 +897,7 @@ class CatastoMainWindow(QMainWindow):
                     f"Widget per il tab principale '{main_tab_name}' non trovato (None).")
         else:
             self.logger.error(f"Tab principale '{main_tab_name}' non trovato.")
-
+    
     @pyqtSlot(int)
     def handle_comune_appena_inserito(self, nuovo_comune_id: int):
         self.logger.info(
@@ -1216,6 +1262,11 @@ class CatastoMainWindow(QMainWindow):
                 "Tentativo di logout senza una sessione utente valida o db_manager.")
 
     def closeEvent(self, event: QCloseEvent):
+            # --- AGGIUNTA: Salva geometria ---
+        settings = QSettings()
+        settings.setValue("UI/WindowGeometry", self.saveGeometry())
+        settings.setValue("UI/WindowState", self.saveState())
+        # ---------------------------------
         logging.getLogger("CatastoGUI").info(
             "Evento closeEvent intercettato in CatastoMainWindow.")
 
@@ -1248,6 +1299,16 @@ class CatastoMainWindow(QMainWindow):
         logging.getLogger("CatastoGUI").info(
             "Applicazione GUI Catasto Storico terminata via closeEvent.")
         event.accept()
+        
+    def restore_window_state(self):
+        """Ripristina la posizione e la dimensione della finestra."""
+        settings = QSettings()
+        geometry = settings.value("UI/WindowGeometry")
+        state = settings.value("UI/WindowState")
+        if geometry:
+            self.restoreGeometry(geometry)
+        if state:
+            self.restoreState(state)    
    
     def _import_possessori_csv(self):
         """Gestisce l'avvio dell'importazione dei possessori tramite thread."""
@@ -1294,6 +1355,19 @@ class CatastoMainWindow(QMainWindow):
         except Exception as e:
             self.logger.error(f"Errore durante la preparazione CSV: {e}", exc_info=True)
             QMessageBox.critical(self, "Errore", f"Impossibile avviare l'importazione: {e}")
+
+    def _handle_stale_data_refresh_click(self):
+        """Gestisce il click con feedback visivo."""
+        self.stale_data_refresh_btn.setEnabled(False)
+        self.stale_data_refresh_btn.setText("In corso...")
+        QCoreApplication.processEvents() 
+        
+        try:
+            if self.db_manager.refresh_materialized_views(show_success_message=True):
+                self.stale_data_bar.hide()
+        finally:
+            self.stale_data_refresh_btn.setEnabled(True)
+            self.stale_data_refresh_btn.setText("Aggiorna Ora")
 
     # --- NUOVI SLOT PER LA GESTIONE DELLA FINE DEL THREAD ---
     
@@ -1462,13 +1536,7 @@ class CatastoMainWindow(QMainWindow):
                                     "La modifica sarà effettiva al prossimo riavvio dell'applicazione.")
 
 
-    def _handle_stale_data_refresh_click(self):
-        """Gestisce il click sul pulsante 'Aggiorna Ora' della barra di notifica."""
-        # Nascondiamo subito la barra per dare un feedback immediato
-        self.stale_data_bar.hide()
-        
-        # Chiamiamo la funzione di refresh esistente, mostrando il messaggio di successo
-        self.db_manager.refresh_materialized_views(show_success_message=True)
+    
     def _apri_manuale_utente(self):
         """
         Apre il file PDF del manuale utente situato nella cartella 'resources'.

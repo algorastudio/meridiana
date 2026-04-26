@@ -97,6 +97,15 @@ class CatastoDBManager:
         self.pool = None # Il pool viene inizializzato esplicitamente dopo
     # In catasto_db_manager.py, SOSTITUISCI il metodo initialize_main_pool con questo:
 
+    def check_connection_alive(self):
+        try:
+            with self.pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+                    return True
+        except:
+            return False
+    
     def initialize_main_pool(self) -> bool:
         if self.pool:
             self.logger.info("Pool principale già inizializzato.")
