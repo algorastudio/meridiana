@@ -98,13 +98,19 @@ class CatastoDBManager:
     # In catasto_db_manager.py, SOSTITUISCI il metodo initialize_main_pool con questo:
 
     def check_connection_alive(self):
-        try:
-            with self.pool.connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("SELECT 1")
-                    return True
-        except:
+        if not self.pool:
             return False
+        conn = None
+        try:
+            conn = self.pool.getconn()
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+            return True
+        except Exception:
+            return False
+        finally:
+            if conn:
+                self.pool.putconn(conn)
     
     def initialize_main_pool(self) -> bool:
         if self.pool:

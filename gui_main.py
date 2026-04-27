@@ -33,7 +33,7 @@ from PyQt5.QtWidgets import QProgressDialog
 
 
 
-from catasto_db_manager import CatastoDBManager
+from catasto_db_manager import CatastoDBManager, DBMError, DBUniqueConstraintError, DBNotFoundError, DBDataError
 from app_utils import get_local_ip_address, get_password_from_keyring 
 import pandas as pd # Importa pandas
 from app_paths import get_available_styles, load_stylesheet, get_logo_path, get_resource_path
@@ -47,7 +47,7 @@ from gui_widgets import (
     InserimentoPossessoreWidget, InserimentoLocalitaWidget, RegistrazioneProprietaWidget,
     OperazioniPartitaWidget, EsportazioniWidget, ReportisticaWidget, StatisticheWidget,
     GestioneUtentiWidget, AuditLogViewerWidget, BackupWidget, 
-    RegistraConsultazioneWidget, WelcomeScreen  , RicercaPartiteWidget,GestionePeriodiStoriciWidget ,
+    RegistraConsultazioneWidget, WelcomeScreen, GestionePeriodiStoriciWidget,
     GestioneTipiLocalitaWidget, GestioneTitoliPossessoWidget, InserimentoPartitaWidget)
 
 from custom_widgets import QPasswordLineEdit
@@ -66,37 +66,6 @@ except ImportError:
     # QMessageBox.warning(None, "Avviso Dipendenza", "La libreria FPDF non è installata. L'esportazione in PDF non sarà disponibile.")
     # Non mostrare il messaggio qui, ma gestire la disabilitazione dei pulsanti PDF.
 
-# Importazione del gestore DB (il percorso potrebbe necessitare aggiustamenti)
-try:
-    from catasto_db_manager import DBMError, DBUniqueConstraintError, DBNotFoundError, DBDataError
-except ImportError:
-    # Fallback o definizione locale se preferisci non importare direttamente
-    # (ma l'importazione è più pulita se sono definite in db_manager)
-    class DBMError(Exception):
-        pass
-
-    class DBUniqueConstraintError(DBMError):
-        pass
-
-    class DBNotFoundError(DBMError):
-        pass
-
-    class DBDataError(DBMError):
-        pass
-    QMessageBox.warning(None, "Avviso Importazione",
-                        "Eccezioni DB personalizzate non trovate in catasto_db_manager, usando definizioni fallback.")
-# Importazione del gestore DB, con gestione dell'errore di importazione
-try:
-    from catasto_db_manager import CatastoDBManager
-except ImportError:
-    sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-    try:
-        from catasto_db_manager import CatastoDBManager
-    except ImportError:
-        QMessageBox.critical(None, "Errore Importazione",
-                             "Non è possibile importare CatastoDBManager. "
-                             "Assicurati che catasto_db_manager.py sia accessibile.")
-        sys.exit(1)
 from gui_auth import LoginDialog
 from workers import CSVImportThread
 
@@ -447,12 +416,14 @@ class CatastoMainWindow(QMainWindow, MainWindowActionsMixin):
 
         # 1. Tab Dashboard
         self.dashboard_widget = DashboardWidget(self.db_manager, self.logged_in_user_info, self.tabs)
+        self.dashboard_widget.setObjectName("tab_home")
         self.tabs.addTab(self.dashboard_widget, "🏠 Home")
         self.dashboard_widget.go_to_tab_signal.connect(self.activate_tab_and_sub_tab)
         self.dashboard_widget.ricerca_globale_richiesta.connect(self.avvia_ricerca_globale_da_dashboard)
 
         # 2. Tab Consultazione e Modifica
         consultazione_contenitore = QWidget()
+        consultazione_contenitore.setObjectName("tab_consultazione")
         layout_consultazione = QVBoxLayout(consultazione_contenitore)
         self.elenco_comuni_widget_ref = ElencoComuniWidget(self.db_manager, self.consultazione_sub_tabs)
         self.consultazione_sub_tabs.addTab(self.elenco_comuni_widget_ref, "Principale")
@@ -472,10 +443,12 @@ class CatastoMainWindow(QMainWindow, MainWindowActionsMixin):
         # 3. Tab Ricerca Globale
         if FUZZY_SEARCH_AVAILABLE:
             self.fuzzy_search_widget = UnifiedFuzzySearchWidget(self.db_manager, parent=self.tabs)
+            self.fuzzy_search_widget.setObjectName("tab_ricerca")
             self.tabs.addTab(self.fuzzy_search_widget, "🔍 Ricerca")
 
         # 4. Tab Inserimento
         inserimento_contenitore = QWidget()
+        inserimento_contenitore.setObjectName("tab_inserimento")
         layout_inserimento = QVBoxLayout(inserimento_contenitore)
         utente_per_inserimenti = self.logged_in_user_info if self.logged_in_user_info else {}
 
@@ -538,12 +511,15 @@ class CatastoMainWindow(QMainWindow, MainWindowActionsMixin):
 
         # 5. Altri Tab
         self.esportazioni_widget_ref = EsportazioniWidget(self.db_manager)
+        self.esportazioni_widget_ref.setObjectName("tab_esportazioni")
         self.tabs.addTab(self.esportazioni_widget_ref, "📤 Esportazioni")
 
         self.reportistica_widget_ref = ReportisticaWidget(self.db_manager)
+        self.reportistica_widget_ref.setObjectName("tab_reportistica")
         self.tabs.addTab(self.reportistica_widget_ref, "Report")
 
         self.statistiche_widget_ref = StatisticheWidget(self.db_manager)
+        self.statistiche_widget_ref.setObjectName("tab_statistiche")
         self.tabs.addTab(self.statistiche_widget_ref, "Statistiche")
 
         # Conta i tab per i tooltip (utile per i tab condizionali)
@@ -562,10 +538,12 @@ class CatastoMainWindow(QMainWindow, MainWindowActionsMixin):
         # 6. Tab Admin
         if self.logged_in_user_info and self.logged_in_user_info.get('ruolo') == 'admin':
             self.gestione_utenti_widget_ref = GestioneUtentiWidget(self.db_manager, self.logged_in_user_info)
+            self.gestione_utenti_widget_ref.setObjectName("tab_utenti")
             self.tabs.addTab(self.gestione_utenti_widget_ref, "Utenti")
             self.tabs.setTabToolTip(main_tab_idx, "Gestione Utenti\nGestisci utenti, ruoli e permessi"); main_tab_idx += 1
 
             sistema_contenitore = QWidget()
+            sistema_contenitore.setObjectName("tab_sistema")
             layout_sistema = QVBoxLayout(sistema_contenitore)
 
             self.audit_viewer_widget_ref = AuditLogViewerWidget(self.db_manager)
@@ -590,7 +568,9 @@ class CatastoMainWindow(QMainWindow, MainWindowActionsMixin):
 
         main_tab_index = -1
         for i in range(self.tabs.count()):
-            if self.tabs.tabText(i) == main_tab_name:
+            widget = self.tabs.widget(i)
+            # Supportiamo sia la ricerca per testo del tab che per objectName (preferibile)
+            if self.tabs.tabText(i) == main_tab_name or (widget and widget.objectName() == main_tab_name):
                 main_tab_index = i
                 break
 
@@ -669,7 +649,8 @@ class CatastoMainWindow(QMainWindow, MainWindowActionsMixin):
         # Trova l'indice del tab principale "Inserimento"
         idx_tab_inserimento = -1
         for i in range(self.tabs.count()):
-            if self.tabs.tabText(i) == "Inserimento":
+            widget = self.tabs.widget(i)
+            if widget and widget.objectName() == "tab_inserimento":
                 idx_tab_inserimento = i
                 break
 
@@ -828,55 +809,57 @@ class CatastoMainWindow(QMainWindow, MainWindowActionsMixin):
         sistema_enabled = is_admin or is_admin_offline_mode
 
         # Applica lo stato di abilitazione ai tab
-        tab_indices = {self.tabs.tabText(
-            i): i for i in range(self.tabs.count())}
+        tab_indices = {}
+        for i in range(self.tabs.count()):
+            widget = self.tabs.widget(i)
+            if widget:
+                obj_name = widget.objectName()
+                if obj_name:
+                    tab_indices[obj_name] = i
 
-        if "Consultazione e Modifica" in tab_indices:
+        if "tab_consultazione" in tab_indices:
             self.tabs.setTabEnabled(
-                tab_indices["Consultazione e Modifica"], consultazione_enabled)
+                tab_indices["tab_consultazione"], consultazione_enabled)
             self.logger.debug(
                 f"Tab 'Consultazione e Modifica' abilitato: {consultazione_enabled}")
 
-        if "Inserimento" in tab_indices:
+        if "tab_inserimento" in tab_indices:
             self.tabs.setTabEnabled(
-                tab_indices["Inserimento"], inserimento_enabled)
+                tab_indices["tab_inserimento"], inserimento_enabled)
             self.logger.debug(
                 f"Tab 'Inserimento' abilitato: {inserimento_enabled}")
 
-        if "Esportazioni" in tab_indices:
+        if "tab_esportazioni" in tab_indices:
             self.tabs.setTabEnabled(
-                tab_indices["Esportazioni"], esportazioni_enabled)
+                tab_indices["tab_esportazioni"], esportazioni_enabled)
             self.logger.debug(
                 f"Tab 'Esportazioni' abilitato: {esportazioni_enabled}")
 
-        if "Reportistica" in tab_indices:
+        if "tab_reportistica" in tab_indices:
             self.tabs.setTabEnabled(
-                tab_indices["Reportistica"], reportistica_enabled)
+                tab_indices["tab_reportistica"], reportistica_enabled)
             self.logger.debug(
                 f"Tab 'Reportistica' abilitato: {reportistica_enabled}")
 
-        if "Statistiche e Viste" in tab_indices:
+        if "tab_statistiche" in tab_indices:
             self.tabs.setTabEnabled(
-                tab_indices["Statistiche e Viste"], statistiche_enabled)
+                tab_indices["tab_statistiche"], statistiche_enabled)
             self.logger.debug(
                 f"Tab 'Statistiche e Viste' abilitato: {statistiche_enabled}")
 
-        # Il tab "Gestione Utenti" è un tab diretto, non un sotto-tab. Se è stato aggiunto come tale.
-        # Se invece è un sotto-tab di "Sistema", allora il controllo è sul sotto-tab specifico.
-        # Data la tua struttura: self.tabs.addTab(self.gestione_utenti_widget_ref, "Gestione Utenti")
-        if "Gestione Utenti" in tab_indices:
+        if "tab_utenti" in tab_indices:
             self.tabs.setTabEnabled(
-                tab_indices["Gestione Utenti"], gestione_utenti_enabled)
+                tab_indices["tab_utenti"], gestione_utenti_enabled)
             self.logger.debug(
                 f"Tab 'Gestione Utenti' abilitato: {gestione_utenti_enabled}")
 
-        if "Sistema" in tab_indices:
-            self.tabs.setTabEnabled(tab_indices["Sistema"], sistema_enabled)
+        if "tab_sistema" in tab_indices:
+            self.tabs.setTabEnabled(tab_indices["tab_sistema"], sistema_enabled)
             self.logger.debug(f"Tab 'Sistema' abilitato: {sistema_enabled}")
 
             # Se siamo in modalità admin_offline, forza la selezione del tab "Sistema" -> "Amministrazione DB"
             if sistema_enabled and is_admin_offline_mode:
-                self.tabs.setCurrentIndex(tab_indices["Sistema"])
+                self.tabs.setCurrentIndex(tab_indices["tab_sistema"])
                 if hasattr(self, 'sistema_sub_tabs'):
                     admin_db_ops_tab_index = -1
                     # Cerca il sotto-tab "Amministrazione DB" all'interno del QTabWidget self.sistema_sub_tabs
@@ -945,11 +928,11 @@ class CatastoMainWindow(QMainWindow, MainWindowActionsMixin):
                 "Tentativo di logout senza una sessione utente valida o db_manager.")
 
     def closeEvent(self, event: QCloseEvent):
-            # --- AGGIUNTA: Salva geometria ---
+        # Salva la geometria e lo stato della finestra prima della chiusura
         settings = QSettings()
         settings.setValue("UI/WindowGeometry", self.saveGeometry())
         settings.setValue("UI/WindowState", self.saveState())
-        # ---------------------------------
+        
         logging.getLogger("CatastoGUI").info(
             "Evento closeEvent intercettato in CatastoMainWindow.")
 
@@ -991,15 +974,4 @@ class CatastoMainWindow(QMainWindow, MainWindowActionsMixin):
         if geometry:
             self.restoreGeometry(geometry)
         if state:
-            self.restoreState(state)    
-   
-
-
-
-
-
-
-
-
-
-
+            self.restoreState(state)
