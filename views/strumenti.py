@@ -636,8 +636,9 @@ class ReportisticaWidget(LazyLoadedWidget):
         
         details = self.db_manager.get_partita_details(partita_id)
         if details:
-            suffisso_str = f"(Suffisso: {details.get('suffisso_partita')})" if details.get('suffisso_partita') else "(Nessun Suffisso)"
-            label_widget.setText(f"Selezionata: N. {details.get('numero_partita')} {suffisso_str} - Comune: {details.get('comune_nome')}")
+            suffisso = getattr(details, 'suffisso_partita', None)
+            suffisso_str = f"(Suffisso: {suffisso})" if suffisso else "(Nessun Suffisso)"
+            label_widget.setText(f"Selezionata: N. {getattr(details, 'numero_partita', '')} {suffisso_str} - Comune: {getattr(details, 'comune_nome', '')}")
         else:
             label_widget.setText(f"<font color='red'>Partita ID {partita_id} non trovata.</font>")
 

@@ -1376,7 +1376,7 @@ class OperazioniPartitaWidget(QWidget):
         possessore_info_completa_sel = None
         if dialog_sel_poss.exec_() == QDialog.Accepted:
             if hasattr(dialog_sel_poss, 'selected_possessore') and dialog_sel_poss.selected_possessore:
-                poss_id_sel = dialog_sel_poss.selected_possessore.get('id')
+                poss_id_sel = getattr(dialog_sel_poss.selected_possessore, 'id', None)
                 if poss_id_sel:
                     dettagli_poss_db = self.db_manager.get_possessore_full_details(
                         poss_id_sel)
