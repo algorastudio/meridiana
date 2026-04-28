@@ -15,10 +15,10 @@ def main():
     # Determina cosa eseguire
     if len(sys.argv) > 1 and sys.argv[1] == 'basic':
         # Esegui solo test base
-        exit_code = pytest.main(['tests/test_basic.py', '-v'])
+        exit_code = pytest.main(['tests/test_basic.py', '-v', '--cov=models', '--cov=db_modules', '--cov-report=term-missing'])
     else:
         # Esegui tutti i test
-        exit_code = pytest.main(['tests/', '-v'])
+        exit_code = pytest.main(['tests/', '-v', '--cov=models', '--cov=db_modules', '--cov-report=term-missing'])
     
     return exit_code
 

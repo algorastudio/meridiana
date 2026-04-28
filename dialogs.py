@@ -609,7 +609,7 @@ class PartitaDetailsDialog(QDialog):
         self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
 
         self.setWindowTitle(
-            f"Dettagli Partita {partita_data['numero_partita']}")
+            f"Dettagli Partita {partita_data.numero_partita}")
         self.setMinimumSize(700, 500)
 
         self._init_ui()
@@ -947,21 +947,21 @@ class PartitaDetailsDialog(QDialog):
         # --- SEZIONE 1: INTESTAZIONE E DATI GENERALI PARTITA ---
         report_lines.append("=" * 70)
         # Includi il suffisso nel titolo, se presente
-        numero_partita_display = f"N. {partita.get('numero_partita', 'N/D')}"
-        if partita.get('suffisso_partita'):
-            numero_partita_display += f" ({partita['suffisso_partita']})"
+        numero_partita_display = f"N. {getattr(partita, 'numero_partita', 'N/D')}"
+        if getattr(partita, 'suffisso_partita', None):
+            numero_partita_display += f" ({partita.suffisso_partita})"
 
         report_lines.append(f"DETTAGLIO PARTITA {numero_partita_display}")
-        report_lines.append(f"Comune: {partita.get('comune_nome', 'N/D')}")
-        report_lines.append(f"ID Partita: {partita.get('id', 'N/D')}")
+        report_lines.append(f"Comune: {getattr(partita, 'comune_nome', 'N/D')}")
+        report_lines.append(f"ID Partita: {getattr(partita, 'id', 'N/D')}")
         report_lines.append("=" * 70)
 
-        report_lines.append(f"Tipo Partita: {partita.get('tipo', 'N/D')}")
-        report_lines.append(f"Stato: {partita.get('stato', 'N/D')}")
-        report_lines.append(f"Data Impianto: {partita.get('data_impianto', 'N/D')}")
-        data_chiusura = partita.get('data_chiusura')
+        report_lines.append(f"Tipo Partita: {getattr(partita, 'tipo', 'N/D')}")
+        report_lines.append(f"Stato: {getattr(partita, 'stato', 'N/D')}")
+        report_lines.append(f"Data Impianto: {getattr(partita, 'data_impianto', 'N/D')}")
+        data_chiusura = getattr(partita, 'data_chiusura', None)
         report_lines.append(f"Data Chiusura: {data_chiusura if data_chiusura else 'N/A'}")
-        numero_provenienza = partita.get('numero_provenienza')
+        numero_provenienza = getattr(partita, 'numero_provenienza', None)
         report_lines.append(f"Numero Provenienza: {numero_provenienza if numero_provenienza else 'N/A'}")
         report_lines.append("\n") # Linea vuota per separazione
 
@@ -969,12 +969,13 @@ class PartitaDetailsDialog(QDialog):
         report_lines.append("=" * 70)
         report_lines.append("POSSESSORI ASSOCIATI")
         report_lines.append("=" * 70)
-        if partita.get('possessori'):
-            for i, poss in enumerate(partita['possessori']):
+        possessori = getattr(partita, 'possessori', [])
+        if possessori:
+            for i, poss in enumerate(possessori):
                 report_lines.append(f"  - Possessore {i+1} (ID: {poss.get('id', 'N/D')}): {poss.get('nome_completo', 'N/D')}")
                 report_lines.append(f"    Titolo di Possesso: {poss.get('titolo', 'N/A')}")
                 report_lines.append(f"    Quota: {poss.get('quota', 'N/A')}")
-                if i < len(partita['possessori']) - 1:
+                if i < len(possessori) - 1:
                     report_lines.append("  " + "-" * 60) # Separatore tra possessori
         else:
             report_lines.append("  Nessun possessore associato a questa partita.")
@@ -984,8 +985,9 @@ class PartitaDetailsDialog(QDialog):
         report_lines.append("=" * 70)
         report_lines.append("IMMOBILI CENSITI")
         report_lines.append("=" * 70)
-        if partita.get('immobili'):
-            for i, imm in enumerate(partita['immobili']):
+        immobili = getattr(partita, 'immobili', [])
+        if immobili:
+            for i, imm in enumerate(immobili):
                 report_lines.append(f"  - Immobile {i+1} (ID: {imm.get('id', 'N/D')}): {imm.get('natura', 'N/D')}")
                 localita_info = f"{imm.get('localita_nome', '')}"
                 if imm.get('localita_tipo'):
@@ -1001,7 +1003,7 @@ class PartitaDetailsDialog(QDialog):
                 if piani_vani_info:
                     report_lines.append(f"    Dettagli: {' | '.join(piani_vani_info)}")
                 
-                if i < len(partita['immobili']) - 1:
+                if i < len(immobili) - 1:
                     report_lines.append("  " + "-" * 60) # Separatore tra immobili
         else:
             report_lines.append("  Nessun immobile associato a questa partita.")
@@ -1011,8 +1013,9 @@ class PartitaDetailsDialog(QDialog):
         report_lines.append("=" * 70)
         report_lines.append("VARIAZIONI STORICHE")
         report_lines.append("=" * 70)
-        if partita.get('variazioni'):
-            for i, var in enumerate(partita['variazioni']):
+        variazioni = getattr(partita, 'variazioni', [])
+        if variazioni:
+            for i, var in enumerate(variazioni):
                 report_lines.append(f"  - Variazione {i+1} (ID: {var.get('id', 'N/D')}): {var.get('tipo', 'N/D')}")
                 report_lines.append(f"    Data Variazione: {var.get('data_variazione', 'N/D')}")
                 
@@ -1046,7 +1049,7 @@ class PartitaDetailsDialog(QDialog):
                 if var.get('note_variazione') : report_lines.append(f"    Note Variazione: {var.get('note_variazione')}") # Se c'è una colonna note per la variazione
                 if var.get('contratto_note') : report_lines.append(f"    Note Contratto: {var.get('contratto_note')}") # Se c'è una colonna note nel contratto
 
-                if i < len(partita['variazioni']) - 1:
+                if i < len(variazioni) - 1:
                     report_lines.append("  " + "-" * 60) # Separatore tra variazioni
         else:
             report_lines.append("  Nessuna variazione registrata per questa partita.")
@@ -2994,18 +2997,18 @@ class PossessoriComuneDialog(QDialog):
                 for row_idx, possessore in enumerate(possessori_list):
                     col = 0
                     self.possessori_table.setItem(
-                        row_idx, col, QTableWidgetItem(str(possessore.get('id', ''))))
+                        row_idx, col, QTableWidgetItem(str(getattr(possessore, 'id', ''))))
                     col += 1
                     self.possessori_table.setItem(row_idx, col, QTableWidgetItem(
-                        possessore.get('nome_completo', '')))
+                        getattr(possessore, 'nome_completo', '') or ''))
                     col += 1
                     self.possessori_table.setItem(
-                        row_idx, col, QTableWidgetItem(possessore.get('cognome_nome', '')))
+                        row_idx, col, QTableWidgetItem(getattr(possessore, 'cognome_nome', '') or ''))
                     col += 1
                     self.possessori_table.setItem(
-                        row_idx, col, QTableWidgetItem(possessore.get('paternita', '')))
+                        row_idx, col, QTableWidgetItem(getattr(possessore, 'paternita', '') or ''))
                     col += 1
-                    stato_str = "Attivo" if possessore.get('attivo', False) else "Non Attivo"
+                    stato_str = "Attivo" if getattr(possessore, 'attivo', False) else "Non Attivo"
                     self.possessori_table.setItem(
                         row_idx, col, QTableWidgetItem(stato_str))
                     col += 1

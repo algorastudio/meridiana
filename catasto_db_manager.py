@@ -30,23 +30,13 @@ from PyQt5.QtCore import (QDate, QDateTime, QPoint, QProcess, QSettings,
 COLONNE_POSSESSORI_DETTAGLI_NUM = 6 # Esempio: ID, Nome Compl, Cognome/Nome, Paternità, Quota, Titolo
 COLONNE_POSSESSORI_DETTAGLI_LABELS = ["ID Poss.", "Nome Completo", "Cognome Nome", "Paternità", "Quota", "Titolo"]
 logger = logging.getLogger(__name__)
-class DBMError(Exception):
-    """Classe base per errori specifici del DBManager."""
-    pass
-class DBUniqueConstraintError(DBMError):
-    """Sollevata quando un vincolo di unicità viene violato."""
-    def __init__(self, message, constraint_name=None, details=None):
-        super().__init__(message)
-        self.constraint_name = constraint_name
-        self.details = details
-class DBNotFoundError(DBMError):
-    """Sollevata quando un record atteso non viene trovato per un'operazione."""
-    pass
-class DBDataError(DBMError):
-    """Sollevata per errori relativi a dati o parametri forniti non validi."""
-    pass
-
-from db_modules.base_manager import BaseDBManager
+from db_modules.base_manager import (
+    BaseDBManager,
+    DBMError,
+    DBUniqueConstraintError,
+    DBNotFoundError,
+    DBDataError
+)
 from db_modules.comuni_mixin import ComuniMixin
 from db_modules.partite_mixin import PartiteMixin
 from db_modules.possessori_mixin import PossessoriMixin

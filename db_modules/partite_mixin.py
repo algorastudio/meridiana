@@ -72,7 +72,7 @@ class PartiteMixin:
         # 3. Query per i DATI PAGINATI (applica LIMIT, OFFSET e ORDER BY)
         select_cols = f"""
             SELECT
-                p.id, p.numero_partita, p.suffisso_partita, p.tipo, p.stato, p.data_impianto,
+                p.id, p.comune_id, p.numero_partita, p.suffisso_partita, p.tipo, p.stato, p.data_impianto,
                 (SELECT COUNT(*) FROM {self.schema}.partita_possessore pp WHERE pp.partita_id = p.id) as num_possessori,
                 (SELECT COUNT(*) FROM {self.schema}.immobile i WHERE i.partita_id = p.id) as num_immobili,
                 (SELECT COUNT(*) FROM {self.schema}.documento_partita dp WHERE dp.partita_id = p.id) as num_documenti_allegati
@@ -271,7 +271,7 @@ class PartiteMixin:
 
         query_base = f"""
             SELECT
-                p.id, p.numero_partita, p.suffisso_partita, p.tipo, p.stato, p.data_impianto,
+                p.id, p.comune_id, p.numero_partita, p.suffisso_partita, p.tipo, p.stato, p.data_impianto,
                 (SELECT COUNT(*) FROM {self.schema}.partita_possessore pp WHERE pp.partita_id = p.id) as num_possessori,
                 (SELECT COUNT(*) FROM {self.schema}.immobile i WHERE i.partita_id = p.id) as num_immobili,
                 (SELECT COUNT(*) FROM {self.schema}.documento_partita dp WHERE dp.partita_id = p.id) as num_documenti_allegati

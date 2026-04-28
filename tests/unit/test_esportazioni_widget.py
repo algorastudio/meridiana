@@ -53,8 +53,8 @@ class TestEsportazioniWidget:
         widget._load_data_on_first_show()  # Attiva manualmente il lazy loading per il test
         return widget
 
-    @patch('gui_widgets.QFileDialog.getSaveFileName')
-    @patch('gui_widgets.QMessageBox.information')
+    @patch('views.strumenti.QFileDialog.getSaveFileName')
+    @patch('views.strumenti.QMessageBox.information')
     def test_export_csv_success(self, mock_msg_info, mock_save_dialog, widget, mock_db_manager, tmp_path):
         """Verifica il successo dell'esportazione CSV per 'Elenco Possessori'."""
         export_file = tmp_path / "possessori.csv"
@@ -75,8 +75,8 @@ class TestEsportazioniWidget:
         assert "ID Possessore;Comune di Riferimento;Nome Completo" in export_file.read_text(encoding='utf-8')
 
     @patch('pandas.DataFrame.to_excel')
-    @patch('gui_widgets.QFileDialog.getSaveFileName')
-    @patch('gui_widgets.QMessageBox.information')
+    @patch('views.strumenti.QFileDialog.getSaveFileName')
+    @patch('views.strumenti.QMessageBox.information')
     def test_export_xls_success(self, mock_msg_info, mock_save_dialog, mock_to_excel, widget, mock_db_manager, tmp_path):
         """Verifica il successo dell'esportazione XLS per 'Elenco Partite'."""
         export_file = tmp_path / "partite.xlsx"
@@ -93,8 +93,8 @@ class TestEsportazioniWidget:
         mock_msg_info.assert_called_once()
 
     @patch('app_utils.BulkReportPDF.output')
-    @patch('gui_widgets.QFileDialog.getSaveFileName')
-    @patch('gui_widgets.QMessageBox.information')
+    @patch('views.strumenti.QFileDialog.getSaveFileName')
+    @patch('views.strumenti.QMessageBox.information')
     def test_export_pdf_success(self, mock_msg_info, mock_save_dialog, mock_pdf_output, widget, mock_db_manager, tmp_path):
         """Verifica il successo dell'esportazione PDF per 'Elenco Immobili'."""
         export_file = tmp_path / "immobili.pdf"
@@ -110,7 +110,7 @@ class TestEsportazioniWidget:
         mock_pdf_output.assert_called_once()
         mock_msg_info.assert_called_once()
 
-    @patch('gui_widgets.QMessageBox.warning')
+    @patch('views.strumenti.QMessageBox.warning')
     def test_export_with_no_data(self, mock_msg_warn, widget, mock_db_manager):
         """Verifica che l'esportazione con dati vuoti mostri un avviso e si interrompa."""
         mock_db_manager.get_possessori_by_comune.return_value = []
@@ -118,20 +118,20 @@ class TestEsportazioniWidget:
         widget.export_type_combo.setCurrentText("Elenco Possessori")
         widget.comune_filter_combo.setCurrentIndex(1)
 
-        with patch('gui_widgets.QFileDialog.getSaveFileName') as mock_save_dialog:
+        with patch('views.strumenti.QFileDialog.getSaveFileName') as mock_save_dialog:
             widget._handle_export_csv()
             mock_save_dialog.assert_not_called()
 
         mock_msg_warn.assert_called_once()
         assert "Nessun Dato" in mock_msg_warn.call_args[0][1]
 
-    @patch('gui_widgets.QMessageBox.warning')
+    @patch('views.strumenti.QMessageBox.warning')
     def test_export_without_selecting_comune(self, mock_msg_warn, widget):
         """Verifica che l'esportazione senza aver selezionato un comune mostri un avviso."""
         widget.export_type_combo.setCurrentText("Elenco Possessori")
         widget.comune_filter_combo.setCurrentIndex(0)  # "--- Seleziona un Comune ---"
 
-        with patch('gui_widgets.QFileDialog.getSaveFileName') as mock_save_dialog:
+        with patch('views.strumenti.QFileDialog.getSaveFileName') as mock_save_dialog:
             widget._handle_export_csv()
             mock_save_dialog.assert_not_called()
 
@@ -139,7 +139,7 @@ class TestEsportazioniWidget:
         assert "Selezione Mancante" in mock_msg_warn.call_args[0][1]
 
     @patch('pandas.ExcelWriter')
-    @patch('gui_widgets.QFileDialog.getSaveFileName')
+    @patch('views.strumenti.QFileDialog.getSaveFileName')
     def test_export_consistenza_patrimoniale_xls(self, mock_save_dialog, mock_excel_writer, widget, mock_db_manager, tmp_path):
         """Verifica il caso speciale di esportazione del 'Report Consistenza Patrimoniale' in Excel."""
         export_file = tmp_path / "consistenza.xlsx"

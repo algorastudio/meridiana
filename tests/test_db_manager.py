@@ -409,9 +409,9 @@ class TestPartitaCRUD:
         p = db.get_partita_details(sample_data['partita_id'])
         assert p is not None
         assert p.numero_partita == 100
-        assert 'possessori' in p
-        assert 'immobili' in p
-        assert 'variazioni' in p
+        assert hasattr(p, 'possessori')
+        assert hasattr(p, 'immobili')
+        assert hasattr(p, 'variazioni')
 
     def test_get_partita_details_non_trovata(self, db_manager):
         assert db_manager.get_partita_details(99999999) is None
