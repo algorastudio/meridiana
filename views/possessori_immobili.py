@@ -707,7 +707,7 @@ class RegistrazioneProprietaWidget(LazyLoadedWidget):
         try:
             self.possessori_cache = self.db_manager.search_possessori_by_term_globally(None, limit=5000)
             for poss in self.possessori_cache:
-                self.possessore_search_combo.addItem(f"{poss['nome_completo']} (Comune: {poss['comune_riferimento_nome']})", poss['id'])
+                self.possessore_search_combo.addItem(f"{poss.nome_completo} (Comune: {poss.comune_nome})", poss.id)
             self.logger.info(f"Caricati {len(self.possessori_cache)} possessori nella combobox.")
         except DBMError as e:
             self.logger.error(f"Errore caricamento possessori globali: {e}")
@@ -723,7 +723,8 @@ class RegistrazioneProprietaWidget(LazyLoadedWidget):
             if self.localita_cache:
                 self.imm_localita_combo.addItem("--- Seleziona Località ---", None)
                 for loc in self.localita_cache:
-                    self.imm_localita_combo.addItem(f"{loc['nome']} ({loc.get('tipo', 'N/D')})", loc['id'])
+                    tipo = loc.tipo or 'N/D'
+                    self.imm_localita_combo.addItem(f"{loc.nome} ({tipo})", loc.id)
                 self.imm_localita_combo.setEnabled(True)
             else:
                 self.imm_localita_combo.addItem("Nessuna località per questo comune", None)

@@ -628,12 +628,12 @@ class PartitaDetailsDialog(QDialog):
 
         # Con questa logica più robusta:
         header_layout = QHBoxLayout()
-        suffisso_db = self.partita.get('suffisso_partita')
+        suffisso_db = self.partita.suffisso_partita
 
         # Controlliamo se il suffisso esiste e non è una stringa vuota
         suffisso_display = f" ({suffisso_db.strip()})" if suffisso_db and suffisso_db.strip() else ""
 
-        titolo_completo = f"<h2>Partita N.{self.partita['numero_partita']}{suffisso_display} - {self.partita['comune_nome']}</h2>"
+        titolo_completo = f"<h2>Partita N.{self.partita.numero_partita}{suffisso_display} - {self.partita.comune_nome}</h2>"
         title_label = QLabel(titolo_completo)
 
         
@@ -645,24 +645,24 @@ class PartitaDetailsDialog(QDialog):
         info_layout = QGridLayout()
 
         info_layout.addWidget(QLabel("<b>ID:</b>"), 0, 0)
-        info_layout.addWidget(QLabel(str(self.partita['id'])), 0, 1)
+        info_layout.addWidget(QLabel(str(self.partita.id)), 0, 1)
 
         info_layout.addWidget(QLabel("<b>Tipo:</b>"), 0, 2)
-        info_layout.addWidget(QLabel(self.partita['tipo']), 0, 3)
+        info_layout.addWidget(QLabel(self.partita.tipo or ''), 0, 3)
 
         info_layout.addWidget(QLabel("<b>Stato:</b>"), 1, 0)
-        info_layout.addWidget(QLabel(self.partita['stato']), 1, 1)
+        info_layout.addWidget(QLabel(self.partita.stato or ''), 1, 1)
 
         info_layout.addWidget(QLabel("<b>Data Impianto:</b>"), 1, 2)
-        info_layout.addWidget(QLabel(str(self.partita['data_impianto'])), 1, 3)
+        info_layout.addWidget(QLabel(str(self.partita.data_impianto) if self.partita.data_impianto else ''), 1, 3)
 
         # NUOVA RIGA: Suffisso Partita
         info_layout.addWidget(QLabel("<b>Suffisso:</b>"), 2, 2) # Adatta la riga/colonna
-        info_layout.addWidget(QLabel(self.partita.get('suffisso_partita', 'N/A')), 2, 3)
+        info_layout.addWidget(QLabel(self.partita.suffisso_partita or 'N/A'), 2, 3)
 
-        if self.partita.get('data_chiusura'):
+        if self.partita.data_chiusura:
             info_layout.addWidget(QLabel("<b>Data Chiusura:</b>"), 2, 0) # Adatta la riga
-            info_layout.addWidget(QLabel(str(self.partita['data_chiusura'])), 2, 1)
+            info_layout.addWidget(QLabel(str(self.partita.data_chiusura)), 2, 1)
         
         info_group.setLayout(info_layout)
         layout.addWidget(info_group)
@@ -689,9 +689,9 @@ class PartitaDetailsDialog(QDialog):
         header_possessori.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         header_possessori.setSectionResizeMode(3, QHeaderView.ResizeToContents)
 # --- FINE MODIFICA ---
-        if self.partita.get('possessori'):
-            possessori_table.setRowCount(len(self.partita['possessori']))
-            for i, possessore in enumerate(self.partita['possessori']):
+        if self.partita.possessori:
+            possessori_table.setRowCount(len(self.partita.possessori))
+            for i, possessore in enumerate(self.partita.possessori):
                 possessori_table.setItem(i, 0, QTableWidgetItem(str(possessore.get('id', ''))))
                 possessori_table.setItem(i, 1, QTableWidgetItem(possessore.get('nome_completo', '')))
                 possessori_table.setItem(i, 2, QTableWidgetItem(possessore.get('titolo', '')))
@@ -703,8 +703,8 @@ class PartitaDetailsDialog(QDialog):
         immobili_tab = QWidget()
         immobili_layout = QVBoxLayout(immobili_tab)
         immobili_table = ImmobiliTableWidget()
-        if self.partita.get('immobili'):
-            immobili_table.populate_data(self.partita['immobili'])
+        if self.partita.immobili:
+            immobili_table.populate_data(self.partita.immobili)
         immobili_layout.addWidget(immobili_table)
         self.tabs.addTab(immobili_tab, "Immobili")
 
@@ -722,9 +722,9 @@ class PartitaDetailsDialog(QDialog):
         variazioni_table.horizontalHeader().setStretchLastSection(True) # Per far espandere l'ultima colonna
         variazioni_table.setEditTriggers(QTableWidget.NoEditTriggers)
 
-        if self.partita.get('variazioni'):
-            variazioni_table.setRowCount(len(self.partita['variazioni']))
-            for i, var in enumerate(self.partita['variazioni']):
+        if self.partita.variazioni:
+            variazioni_table.setRowCount(len(self.partita.variazioni))
+            for i, var in enumerate(self.partita.variazioni):
                 col = 0
                 variazioni_table.setItem(i, col, QTableWidgetItem(str(var.get('id', '')))); col += 1
                 variazioni_table.setItem(i, col, QTableWidgetItem(var.get('tipo', ''))); col += 1
@@ -828,7 +828,7 @@ class PartitaDetailsDialog(QDialog):
 
         # Carica i documenti e aggiorna la tabella dei documenti
         try:
-            documenti_list = self.db_manager.get_documenti_per_partita(self.partita['id'])
+            documenti_list = self.db_manager.get_documenti_per_partita(self.partita.id)
             self.documents_table.setRowCount(0) # Pulisci prima di popolare
 
             if documenti_list:
@@ -851,14 +851,14 @@ class PartitaDetailsDialog(QDialog):
                     self.documents_table.setItem(row, 5, path_item)
                 self.documents_table.resizeColumnsToContents()
             else:
-                self.logger.info(f"Nessun documento allegato per la partita ID {self.partita['id']}.")
+                self.logger.info(f"Nessun documento allegato per la partita ID {self.partita.id}.")
                 self.documents_table.setRowCount(1)
                 no_docs_item = QTableWidgetItem("Nessun documento allegato a questa partita.")
                 no_docs_item.setTextAlignment(Qt.AlignCenter)
                 self.documents_table.setItem(0, 0, no_docs_item)
                 self.documents_table.setSpan(0, 0, 1, self.documents_table.columnCount())
         except Exception as e:
-            self.logger.error(f"Errore durante il caricamento dei documenti per la partita {self.partita['id']}: {e}", exc_info=True)
+            self.logger.error(f"Errore durante il caricamento dei documenti per la partita {self.partita.id}: {e}", exc_info=True)
             QMessageBox.critical(self, "Errore Caricamento Documenti", f"Si è verificato un errore durante il caricamento dei documenti: {e}")
             self.documents_table.setRowCount(1)
             error_item = QTableWidgetItem("Errore nel caricamento dei documenti.")
@@ -876,7 +876,7 @@ class PartitaDetailsDialog(QDialog):
             QMessageBox.warning(self, "Errore Dati", "Nessun dato della partita da esportare.")
             return
 
-        partita_id = self.partita.get('id', 'sconosciuto')
+        partita_id = self.partita.id
         default_filename = f"dettaglio_partita_{partita_id}_{date.today().isoformat()}.txt"
 
         file_path, _ = QFileDialog.getSaveFileName(
@@ -909,8 +909,8 @@ class PartitaDetailsDialog(QDialog):
             QMessageBox.warning(self, "Errore Dati", "Nessun dato della partita da esportare.")
             return
 
-        partita_id = self.partita.get('id', 'sconosciuto')
-        pdf_report_title = f"Dettaglio Partita N.{self.partita.get('numero_partita', 'N/D')} - Comune: {self.partita.get('comune_nome', 'N/D')}"
+        partita_id = self.partita.id
+        pdf_report_title = f"Dettaglio Partita N.{self.partita.numero_partita} - Comune: {self.partita.comune_nome}"
         default_filename_prefix = f"dettaglio_partita_{partita_id}"
 
         # Genera un testo leggibile per l'anteprima e per il PDF
@@ -1365,9 +1365,9 @@ class ModificaPartitaDialog(QDialog):
             return
 
         # 1. Popola il titolo principale
-        suffisso_db = self.partita_data_originale.get('suffisso_partita')
-        suffisso_display = f" ({suffisso_db})" if suffisso_db and str(suffisso_db).strip() else ""
-        titolo_text = f"<h2>Partita N.{self.partita_data_originale.get('numero_partita', 'N/D')}{suffisso_display} - {self.partita_data_originale.get('comune_nome', 'N/D')}</h2>"
+        suffisso_db = self.partita_data_originale.suffisso_partita
+        suffisso_display = f" ({suffisso_db.strip()})" if suffisso_db and suffisso_db.strip() else ""
+        titolo_text = f"<h2>Partita N.{self.partita_data_originale.numero_partita}{suffisso_display} - {self.partita_data_originale.comune_nome}</h2>"
         self.title_label.setText(titolo_text)
         
         # 2. Popola tutti i tab
@@ -1384,19 +1384,19 @@ class ModificaPartitaDialog(QDialog):
         partita = self.partita_data_originale
         if not partita: return
 
-        self.numero_partita_spinbox.setValue(partita.get('numero_partita', 0))
-        self.suffisso_partita_edit.setText(partita.get('suffisso_partita', '') or '')
+        self.numero_partita_spinbox.setValue(partita.numero_partita or 0)
+        self.suffisso_partita_edit.setText(partita.suffisso_partita or '')
 
-        tipo_idx = self.tipo_combo.findText(partita.get('tipo', ''), Qt.MatchFixedString)
+        tipo_idx = self.tipo_combo.findText(partita.tipo or '', Qt.MatchFixedString)
         if tipo_idx >= 0: self.tipo_combo.setCurrentIndex(tipo_idx)
 
-        stato_idx = self.stato_combo.findText(partita.get('stato', ''), Qt.MatchFixedString)
+        stato_idx = self.stato_combo.findText(partita.stato or '', Qt.MatchFixedString)
         if stato_idx >= 0: self.stato_combo.setCurrentIndex(stato_idx)
 
-        self.data_impianto_edit.setDate(datetime_to_qdate(partita.get('data_impianto')))
+        self.data_impianto_edit.setDate(datetime_to_qdate(partita.data_impianto))
 
         # Logica aggiornata per data_chiusura
-        data_chiusura_db = partita.get('data_chiusura')
+        data_chiusura_db = partita.data_chiusura
         if data_chiusura_db:
             self.data_chiusura_check.setChecked(True)
             self.data_chiusura_edit.setDate(datetime_to_qdate(data_chiusura_db))
@@ -1404,7 +1404,7 @@ class ModificaPartitaDialog(QDialog):
             self.data_chiusura_check.setChecked(False)
             
         # Logica aggiornata per numero_provenienza
-        num_prov_val = partita.get('numero_provenienza')
+        num_prov_val = partita.numero_provenienza
         self.numero_provenienza_edit.setText(str(num_prov_val) if num_prov_val is not None else "")
 
         self.logger.debug("Tab 'Dati Generali' popolato con la nuova logica.")
@@ -1455,7 +1455,7 @@ class ModificaPartitaDialog(QDialog):
         self.logger.info(f"Caricamento immobili associati per partita ID: {self.partita_id}")
 
         try:
-            immobili = self.partita_data_originale.get('immobili', []) # Dati immobili sono già in partita_data_originale
+            immobili = self.partita_data_originale.immobili # Dati immobili sono già in partita_data_originale
             if immobili:
                 self.immobili_table.setRowCount(len(immobili))
                 for row_idx, imm in enumerate(immobili):
@@ -1495,7 +1495,7 @@ class ModificaPartitaDialog(QDialog):
         self.logger.info(f"Caricamento variazioni associate per partita ID: {self.partita_id}")
 
         try:
-            variazioni = self.partita_data_originale.get('variazioni', []) # Dati variazioni sono già in partita_data_originale
+            variazioni = self.partita_data_originale.variazioni # Dati variazioni sono già in partita_data_originale
             if variazioni:
                 self.variazioni_table.setRowCount(len(variazioni))
                 for row_idx, var in enumerate(variazioni):
@@ -1589,7 +1589,7 @@ class ModificaPartitaDialog(QDialog):
         
         # Validazione: verifica che la nuova partita non esista già
         # Dobbiamo usare il comune_id della partita corrente
-        comune_id_corrente = self.partita_data_originale.get('comune_id')
+        comune_id_corrente = self.partita_data_originale.comune_id
         if comune_id_corrente:
             existing = self.db_manager.search_partite(
                 comune_id=comune_id_corrente,
@@ -1714,7 +1714,7 @@ class ModificaPartitaDialog(QDialog):
     # -- Possessori --
     def _aggiungi_possessore_a_partita(self):
         self.logger.debug(f"Richiesta aggiunta possessore per partita ID {self.partita_id}")
-        comune_id_partita = self.partita_data_originale.get('comune_id')
+        comune_id_partita = self.partita_data_originale.comune_id
         if comune_id_partita is None:
             QMessageBox.warning(self, "Errore", "Comune della partita non determinato. Impossibile aggiungere possessore.")
             return
@@ -1725,14 +1725,14 @@ class ModificaPartitaDialog(QDialog):
 
         if possessore_dialog.exec_() == QDialog.Accepted:
             if hasattr(possessore_dialog, 'selected_possessore') and possessore_dialog.selected_possessore:
-                selected_possessore_id = possessore_dialog.selected_possessore.get('id')
-                selected_possessore_nome = possessore_dialog.selected_possessore.get('nome_completo')
+                selected_possessore_id = possessore_dialog.selected_possessore.id
+                selected_possessore_nome = possessore_dialog.selected_possessore.nome_completo
         if not selected_possessore_id or not selected_possessore_nome:
             self.logger.info("Nessun possessore selezionato o creato.")
             return
 
         self.logger.info(f"Possessore selezionato/creato: ID {selected_possessore_id}, Nome: {selected_possessore_nome}")
-        tipo_partita_corrente = self.partita_data_originale.get('tipo', 'principale')
+        tipo_partita_corrente = self.partita_data_originale.tipo or 'principale'
         dettagli_legame = DettagliLegamePossessoreDialog.get_details_for_new_legame(selected_possessore_nome, tipo_partita_corrente, db_manager=self.db_manager, parent=self)
 
         if not dettagli_legame:
@@ -1779,7 +1779,7 @@ class ModificaPartitaDialog(QDialog):
         quota_attuale = quota_attuale_item.text() if quota_attuale_item and quota_attuale_item.text() != 'N/D' else None
 
         self.logger.debug(f"Richiesta modifica legame per relazione ID {id_relazione_pp} (Possessore: {nome_possessore_attuale})")
-        tipo_partita_corrente = self.partita_data_originale.get('tipo', 'principale')
+        tipo_partita_corrente = self.partita_data_originale.tipo or 'principale'
         nuovi_dettagli_legame = DettagliLegamePossessoreDialog.get_details_for_edit_legame(
             nome_possessore_attuale, tipo_partita_corrente, titolo_attuale, quota_attuale,
             db_manager=self.db_manager, parent=self
@@ -2549,21 +2549,19 @@ class ModificaPossessoreDialog(QDialog):
             QTimer.singleShot(0, self.reject)
             return
 
-        self.nome_completo_edit.setText(
-            self.possessore_data_originale.get('nome_completo', ''))
-        self.cognome_nome_edit.setText(self.possessore_data_originale.get(
-            'cognome_nome', ''))
-        self.paternita_edit.setText(
-            self.possessore_data_originale.get('paternita', ''))
-        self.attivo_checkbox.setChecked(
-            self.possessore_data_originale.get('attivo', True))
+        if self.is_edit_mode:
+            self.nome_completo_edit.setText(
+                self.possessore_data_originale.nome_completo or '')
+            self.cognome_nome_edit.setText(self.possessore_data_originale.cognome_nome or '')
+            self.paternita_edit.setText(
+                self.possessore_data_originale.paternita or '')
+            self.attivo_checkbox.setChecked(
+                self.possessore_data_originale.attivo if self.possessore_data_originale.attivo is not None else True)
 
-        self.selected_comune_ref_id = self.possessore_data_originale.get(
-            'comune_riferimento_id')  # Salva l'ID
-        nome_comune_ref = self.possessore_data_originale.get(
-            'comune_riferimento_nome', "Nessun comune assegnato")
-        self.comune_ref_label.setText(
-            f"{nome_comune_ref} (ID: {self.selected_comune_ref_id or 'N/A'})")
+            self.selected_comune_ref_id = self.possessore_data_originale.comune_id
+            nome_comune_ref = self.possessore_data_originale.comune_nome or 'N/D'
+            self.comune_ref_label.setText(
+                f"Comune: {nome_comune_ref} (ID: {self.selected_comune_ref_id})")
 
     def _cambia_comune_riferimento(self):
         # Usa ComuneSelectionDialog per cambiare il comune di riferimento
@@ -2754,7 +2752,7 @@ class ModificaComuneDialog(QDialog):
 
         # Ora carichiamo i dati specifici del comune da modificare
         all_comuni = self.db_manager.get_all_comuni_details()
-        found_comune = next((c for c in all_comuni if c.get('id') == self.comune_id), None)
+        found_comune = next((c for c in all_comuni if c.id == self.comune_id), None)
         
         if not found_comune:
             QMessageBox.critical(self, "Errore Caricamento", f"Impossibile caricare dati per Comune ID: {self.comune_id}.")
@@ -2764,14 +2762,14 @@ class ModificaComuneDialog(QDialog):
         self.comune_data_originale = found_comune
         
         # Popoliamo i campi della UI con i dati caricati
-        self.nome_edit.setText(self.comune_data_originale.get('nome_comune', ''))
-        self.provincia_edit.setText(self.comune_data_originale.get('provincia', ''))
-        self.regione_edit.setText(self.comune_data_originale.get('regione', ''))
-        self.codice_catastale_edit.setText(self.comune_data_originale.get('codice_catastale', ''))
-        self.note_edit.setText(self.comune_data_originale.get('note', ''))
+        self.nome_edit.setText(self.comune_data_originale.nome_comune or '')
+        self.provincia_edit.setText(self.comune_data_originale.provincia or '')
+        self.regione_edit.setText(self.comune_data_originale.regione or '')
+        self.codice_catastale_edit.setText(self.comune_data_originale.codice_catastale or '')
+        self.note_edit.setText(self.comune_data_originale.note or '')
 
         # --- MODIFICA CHIAVE: Selezioniamo il periodo corretto nel ComboBox ---
-        periodo_id_attuale = self.comune_data_originale.get('periodo_id')
+        periodo_id_attuale = self.comune_data_originale.periodo_id
         if periodo_id_attuale is not None:
             index = self.periodo_combo.findData(periodo_id_attuale)
             if index != -1:
@@ -2781,8 +2779,8 @@ class ModificaComuneDialog(QDialog):
         # --- FINE MODIFICA ---
 
         # Gestione date
-        di_str = self.comune_data_originale.get('data_istituzione'); self.data_istituzione_edit.setDate(QDate.fromString(str(di_str), "yyyy-MM-dd") if di_str else QDate())
-        ds_str = self.comune_data_originale.get('data_soppressione'); self.data_soppressione_edit.setDate(QDate.fromString(str(ds_str), "yyyy-MM-dd") if ds_str else QDate())
+        di_str = self.comune_data_originale.data_istituzione; self.data_istituzione_edit.setDate(QDate.fromString(str(di_str), "yyyy-MM-dd") if di_str else QDate())
+        ds_str = self.comune_data_originale.data_soppressione; self.data_soppressione_edit.setDate(QDate.fromString(str(ds_str), "yyyy-MM-dd") if ds_str else QDate())
 
     def _save_changes(self):
         # --- MODIFICA CHIAVE: Lettura dati dal ComboBox ---
@@ -3126,18 +3124,18 @@ class PartiteComuneDialog(QDialog):
                 self.partite_table.setRowCount(len(partite_list))
                 for row_idx, partita in enumerate(partite_list):
                     col = 0
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('id', '')))); col += 1
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('numero_partita', '')))); col += 1
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('suffisso_partita', '') or '')); col += 1 
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('tipo', ''))); col += 1
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('stato', ''))); col += 1
-                    data_imp = partita.get('data_impianto')
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.id))); col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.numero_partita))); col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.suffisso_partita or '')); col += 1 
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.tipo or '')); col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.stato or '')); col += 1
+                    data_imp = partita.data_impianto
                     self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(data_imp) if data_imp else '')); col += 1
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('num_possessori', '0')))); col += 1
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('num_immobili', '0')))); col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.num_possessori or '0'))); col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.num_immobili or '0'))); col += 1
                     
                     # --- NUOVA RIGA PER IL NUMERO DEI DOCUMENTI ---
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('num_documenti_allegati', '0')))); col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.num_documenti_allegati or '0'))); col += 1
 
                 self.partite_table.resizeColumnsToContents()
             else:
@@ -3293,11 +3291,11 @@ class ModificaLocalitaDialog(QDialog):
             self.reject()
             return
 
-        self.nome_edit.setText(self.localita_data_originale.get('nome', ''))
-        self.comune_display_label.setText(f"{self.localita_data_originale.get('comune_nome', 'N/D')} (ID: {self.comune_id_parent})")
+        self.nome_edit.setText(self.localita_data_originale.nome or '')
+        self.comune_display_label.setText(f"{self.localita_data_originale.comune_nome or 'N/D'} (ID: {self.comune_id_parent})")
 
         # --- MODIFICA CHIAVE QUI: Seleziona l'item nel ComboBox basandosi sull'ID ---
-        tipo_id_attuale = self.localita_data_originale.get('tipo_id')
+        tipo_id_attuale = self.localita_data_originale.tipo_id
         if tipo_id_attuale is not None:
             index = self.tipo_combo.findData(tipo_id_attuale)
             if index >= 0:
@@ -3593,11 +3591,11 @@ class LocalitaSelectionDialog(QDialog):
                     self.localita_table.setRowCount(len(localita_results))
                     for i, loc in enumerate(localita_results):
                         self.localita_table.setItem(
-                            i, 0, QTableWidgetItem(str(loc.get('id', ''))))
+                            i, 0, QTableWidgetItem(str(loc.id or '')))
                         self.localita_table.setItem(
-                            i, 1, QTableWidgetItem(loc.get('nome', '')))
+                            i, 1, QTableWidgetItem(loc.nome or ''))
                         self.localita_table.setItem(
-                            i, 2, QTableWidgetItem(loc.get('tipo', '')))
+                            i, 2, QTableWidgetItem(loc.tipo or ''))
                     self.localita_table.resizeColumnsToContents()
                 else:
                     self.logger.info(f"Nessuna località trovata per comune ID {self.comune_id} con filtro '{actual_filter_text}'.")
@@ -3934,7 +3932,7 @@ class ModificaImmobileDialog(QDialog):
         try:
             localita_list = self.db_manager.get_localita_by_comune(self.comune_id_partita)
             for loc in localita_list:
-                self.localita_combo.addItem(loc['nome'], userData=loc['id'])
+                self.localita_combo.addItem(loc.nome, userData=loc.id)
         except Exception as e:
             self.logger.error(f"Errore nel caricamento delle località: {e}", exc_info=True)
             self.localita_combo.addItem("Errore caricamento", -1)
@@ -3953,17 +3951,18 @@ class ModificaImmobileDialog(QDialog):
                 return
 
             # Popola i campi
-            self.natura_combo.setCurrentText(self.dati_originali.get('natura', ''))
-            self.classificazione_edit.setText(self.dati_originali.get('classificazione', ''))
-            self.indirizzo_edit.setText(self.dati_originali.get('indirizzo', ''))
-            self.foglio_edit.setText(str(self.dati_originali.get('foglio', '')))
-            self.mappale_edit.setText(str(self.dati_originali.get('mappale', '')))
-            self.subalterno_edit.setText(str(self.dati_originali.get('subalterno', '')))
-            self.vani_spinbox.setValue(float(self.dati_originali.get('vani_o_superficie', 0.0)))
-            self.note_edit.setPlainText(self.dati_originali.get('note', ''))
+            self.natura_combo.setCurrentText(self.dati_originali.natura or '')
+            self.classificazione_edit.setText(self.dati_originali.classificazione or '')
+            self.indirizzo_edit.setText(getattr(self.dati_originali, 'indirizzo', ''))
+            self.foglio_edit.setText(str(getattr(self.dati_originali, 'foglio', '')))
+            self.mappale_edit.setText(str(getattr(self.dati_originali, 'mappale', '')))
+            self.subalterno_edit.setText(str(getattr(self.dati_originali, 'subalterno', '')))
+            # Mappa vani_o_superficie a numero_vani
+            self.vani_spinbox.setValue(float(self.dati_originali.numero_vani or 0.0))
+            self.note_edit.setPlainText(getattr(self.dati_originali, 'note', ''))
             
             # Seleziona la località corretta nel ComboBox
-            id_localita_originale = self.dati_originali.get('id_localita')
+            id_localita_originale = self.dati_originali.localita_id
             if id_localita_originale:
                 index = self.localita_combo.findData(id_localita_originale)
                 if index != -1:
@@ -4394,10 +4393,10 @@ class ComuneSelectionDialog(QDialog):
             if comuni:
                 for comune in comuni:
                     item = QListWidgetItem(
-                        f"{comune['nome']} (ID: {comune['id']}, {comune['provincia']})")
-                    item.setData(Qt.UserRole, comune['id'])
+                        f"{comune.nome_comune} (ID: {comune.id}, {comune.provincia})")
+                    item.setData(Qt.UserRole, comune.id)
                     # Per recuperare il nome facilmente
-                    item.setData(Qt.UserRole + 1, comune['nome'])
+                    item.setData(Qt.UserRole + 1, comune.nome_comune)
                     self.comuni_list.addItem(item)
             else:
                 self.comuni_list.addItem("Nessun comune trovato.")
@@ -4849,11 +4848,11 @@ class LocalitaSelectionDialog(QDialog):
                     self.localita_table.setRowCount(len(localita_results))
                     for i, loc in enumerate(localita_results):
                         self.localita_table.setItem(
-                            i, 0, QTableWidgetItem(str(loc.get('id', ''))))
+                            i, 0, QTableWidgetItem(str(loc.id or '')))
                         self.localita_table.setItem(
-                            i, 1, QTableWidgetItem(loc.get('nome', '')))
+                            i, 1, QTableWidgetItem(loc.nome or ''))
                         self.localita_table.setItem(
-                            i, 2, QTableWidgetItem(loc.get('tipo', '')))
+                            i, 2, QTableWidgetItem(loc.tipo or ''))
                     self.localita_table.resizeColumnsToContents()
                 else:
                     self.logger.info(f"Nessuna località trovata per comune ID {self.comune_id} con filtro '{actual_filter_text}'.")

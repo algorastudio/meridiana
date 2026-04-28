@@ -166,15 +166,15 @@ class ElencoComuniWidget(LazyLoadedWidget):
             self.logger.info(f">>> Inizio ciclo FOR per popolare la tabella con {len(comuni_list)} elementi.")
             self.comuni_table.setRowCount(len(comuni_list))
             for row_idx, comune in enumerate(comuni_list):
-                self.comuni_table.setItem(row_idx, 0, QTableWidgetItem(str(comune.get('id', ''))))
-                self.comuni_table.setItem(row_idx, 1, QTableWidgetItem(comune.get('nome_comune', '')))
-                self.comuni_table.setItem(row_idx, 2, QTableWidgetItem(comune.get('codice_catastale', '')))
-                self.comuni_table.setItem(row_idx, 3, QTableWidgetItem(comune.get('provincia', '')))
-                data_ist = comune.get('data_istituzione')
+                self.comuni_table.setItem(row_idx, 0, QTableWidgetItem(str(comune.id)))
+                self.comuni_table.setItem(row_idx, 1, QTableWidgetItem(comune.nome_comune or ''))
+                self.comuni_table.setItem(row_idx, 2, QTableWidgetItem(comune.codice_catastale or ''))
+                self.comuni_table.setItem(row_idx, 3, QTableWidgetItem(comune.provincia or ''))
+                data_ist = comune.data_istituzione
                 self.comuni_table.setItem(row_idx, 4, QTableWidgetItem(str(data_ist) if data_ist else ''))
-                data_soppr = comune.get('data_soppressione')
+                data_soppr = comune.data_soppressione
                 self.comuni_table.setItem(row_idx, 5, QTableWidgetItem(str(data_soppr) if data_soppr else ''))
-                self.comuni_table.setItem(row_idx, 6, QTableWidgetItem(comune.get('note', '')))
+                self.comuni_table.setItem(row_idx, 6, QTableWidgetItem(comune.note or ''))
             
             self.comuni_table.resizeColumnsToContents()
             self.logger.info(">>> Fine ciclo FOR.")

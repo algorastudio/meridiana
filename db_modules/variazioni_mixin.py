@@ -12,6 +12,7 @@ import uuid
 import os
 import shutil # Per trovare i percorsi degli eseguibili
 from contextlib import contextmanager
+from models.variazione import Variazione
 from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication, 
                              QCheckBox, QComboBox, QDateEdit, QDateTimeEdit,
                              QDialog, QDialogButtonBox, QDoubleSpinBox,
@@ -47,7 +48,7 @@ class DBDataError(DBMError):
     pass
 
 class VariazioniMixin:
-    def get_elenco_variazioni_per_esportazione(self, comune_id: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_elenco_variazioni_per_esportazione(self, comune_id: Optional[int] = None) -> List[Variazione]:
         """Recupera un elenco completo di variazioni, usando la vista aggiornata."""
         query = f"SELECT * FROM {self.schema}.v_variazioni_complete"
         params = []
@@ -76,7 +77,7 @@ class VariazioniMixin:
             with self._get_connection() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                     cur.execute(query, params)
-                    return [dict(row) for row in cur.fetchall()]
+                    return [Variazione.from_dict(dict(row)) for row in cur.fetchall()]
         except Exception as e:
             # Incapsula l'errore per dare più contesto al chiamante GUI
             raise DBMError(f"Impossibile recuperare l'elenco delle variazioni: {e}") from e
@@ -84,13 +85,15 @@ class VariazioniMixin:
     # --- NUOVO METODO: Aggiungi questo metodo alla classe CatastoDBManager ---
     def search_variazioni(self, tipo: Optional[str] = None, data_inizio: Optional[date] = None,
                           data_fine: Optional[date] = None, partita_origine_id: Optional[int] = None,
-                          partita_destinazione_id: Optional[int] = None, comune_id: Optional[int] = None) -> List[Dict]: # Usa comune_id
+                          partita_destinazione_id: Optional[int] = None, comune_id: Optional[int] = None) -> List[Variazione]: # Usa comune_id
         """Chiama la funzione SQL cerca_variazioni (MODIFICATA per comune_id)."""
         try:
             # Funzione SQL aggiornata per comune_id
             query = "SELECT * FROM cerca_variazioni(%s, %s, %s, %s, %s, %s)"
             params = (tipo, data_inizio, data_fine, partita_origine_id, partita_destinazione_id, comune_id) # Passa ID
-            if self.execute_query(query, params): return self.fetchall()
+            if self.execute_query(query, params): 
+                results = self.fetchall()
+                return [Variazione.from_dict(dict(row)) for row in results]
         except psycopg2.Error as db_err: logger.error(f"Errore DB in search_variazioni: {db_err}")
         except Exception as e: logger.error(f"Errore Python in search_variazioni: {e}")
         return []
@@ -158,7 +161,7 @@ class VariazioniMixin:
         except psycopg2.Error as db_err: logger.error(f"Errore DB eliminazione contratto ID {contratto_id}: {db_err}"); return False
         except Exception as e: logger.error(f"Errore Python eliminazione contratto ID {contratto_id}: {e}"); self.rollback(); return False
 
-    def get_cronologia_variazioni(self, comune_origine_id: Optional[int] = None, tipo_variazione: Optional[str] = None, limit: int = 100) -> List[Dict]: # Usa comune_id
+    def get_cronologia_variazioni(self, comune_origine_id: Optional[int] = None, tipo_variazione: Optional[str] = None, limit: int = 100) -> List[Variazione]: # Usa comune_id
         """Recupera dati dalla vista materializzata mv_cronologia_variazioni (aggiornata), filtrando per ID."""
         try:
             params = []
@@ -176,7 +179,9 @@ class VariazioniMixin:
                 query += " WHERE tipo_variazione = %s"; params.append(tipo_variazione)
 
             query += " ORDER BY data_variazione DESC LIMIT %s"; params.append(limit)
-            if self.execute_query(query, tuple(params)): return self.fetchall()
+            if self.execute_query(query, tuple(params)): 
+                results = self.fetchall()
+                return [Variazione.from_dict(dict(row)) for row in results]
         except psycopg2.Error as db_err: logger.error(f"Errore DB get_cronologia_variazioni: {db_err}"); return []
         except Exception as e: logger.error(f"Errore Python get_cronologia_variazioni: {e}"); return []
 

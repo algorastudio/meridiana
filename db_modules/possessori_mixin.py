@@ -12,6 +12,7 @@ import uuid
 import os
 import shutil # Per trovare i percorsi degli eseguibili
 from contextlib import contextmanager
+from models.possessore import Possessore
 from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication, 
                              QCheckBox, QComboBox, QDateEdit, QDateTimeEdit,
                              QDialog, QDialogButtonBox, QDoubleSpinBox,
@@ -195,7 +196,7 @@ class PossessoriMixin:
     
     # In catasto_db_manager.py, aggiungi questo nuovo metodo alla classe
 
-    def get_possessori_by_comune(self, comune_id: int, filter_text: Optional[str] = None, solo_con_partite: bool = False) -> List[Dict[str, Any]]:
+    def get_possessori_by_comune(self, comune_id: int, filter_text: Optional[str] = None, solo_con_partite: bool = False) -> List[Possessore]:
         """
         Recupera i possessori per un dato comune, con filtri opzionali.
         Se solo_con_partite è True, restituisce solo i possessori con almeno una partita associata.
@@ -243,13 +244,13 @@ class PossessoriMixin:
             with self._get_connection() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                     cur.execute(query, tuple(params))
-                    return [dict(row) for row in cur.fetchall()]
+                    return [Possessore.from_dict(dict(row)) for row in cur.fetchall()]
         except Exception as e:
             self.logger.error(f"Errore DB in get_possessori_by_comune: {e}", exc_info=True)
             raise DBMError("Impossibile recuperare i possessori.") from e
     
     
-    def search_possessori_by_term_globally(self, search_term: Optional[str], limit: int = 200) -> List[Dict[str, Any]]:
+    def search_possessori_by_term_globally(self, search_term: Optional[str], limit: int = 200) -> List[Possessore]:
         """
         Ricerca possessori globalmente, usando il nuovo pattern di connessione.
         """
@@ -277,7 +278,7 @@ class PossessoriMixin:
                 with conn.cursor(cursor_factory=DictCursor) as cur:
                     cur.execute(query, tuple(params))
                     rows = cur.fetchall()
-                    data_list = [dict(row) for row in rows]
+                    data_list = [Possessore.from_dict(dict(row)) for row in rows]
                     self.logger.info(f"search_possessori_by_term_globally ha trovato {len(data_list)} possessori.")
                     return data_list
         except Exception as e:
@@ -382,7 +383,7 @@ class PossessoriMixin:
             self.logger.error(f"Errore archiviazione possessore {possessore_id}: {e}", exc_info=True)
             raise DBMError(f"Impossibile archiviare il possessore: {e}") from e
 
-    def get_possessore_full_details(self, possessore_id: int) -> Optional[Dict[str, Any]]:
+    def get_possessore_full_details(self, possessore_id: int) -> Optional[Possessore]:
         """Recupera i dettagli completi di un singolo possessore in modo sicuro."""
         if not isinstance(possessore_id, int) or possessore_id <= 0:
             self.logger.error(f"ID possessore non valido: {possessore_id}")
@@ -407,7 +408,7 @@ class PossessoriMixin:
                     
                     if possessore_data:
                         self.logger.info(f"Dettagli recuperati per il possessore ID {possessore_id}.")
-                        return dict(possessore_data)
+                        return Possessore.from_dict(dict(possessore_data))
                     else:
                         self.logger.warning(f"Nessun possessore trovato con ID {possessore_id}.")
                         return None
@@ -461,7 +462,7 @@ class PossessoriMixin:
     # --- Metodi Manutenzione e Ottimizzazione (Invariati rispetto a comune_id) ---
 # In catasto_db_manager.py, SOSTITUISCI il metodo refresh_materialized_views con questo:
 
-    def ricerca_avanzata_possessori(self, query_text: str, similarity_threshold: Optional[float] = 0.2) -> List[Dict[str, Any]]:
+    def ricerca_avanzata_possessori(self, query_text: str, similarity_threshold: Optional[float] = 0.2) -> List[Possessore]:
         """
         Esegue una ricerca avanzata di possessori chiamando una funzione SQL in modo sicuro.
         """
@@ -472,7 +473,7 @@ class PossessoriMixin:
             with self._get_connection() as conn:
                 with conn.cursor(cursor_factory=DictCursor) as cur:
                     cur.execute(query, params)
-                    results = [dict(row) for row in cur.fetchall()]
+                    results = [Possessore.from_dict(dict(row)) for row in cur.fetchall()]
                     self.logger.info(f"Ricerca avanzata possessori per '{query_text}' ha prodotto {len(results)} risultati.")
                     return results
         except Exception as e:

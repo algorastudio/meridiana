@@ -698,8 +698,8 @@ class UnifiedFuzzySearchWidget(QWidget):
         entity_id = self._get_entity_id_from_table(self.localita_table, index)
         if entity_id:
             localita_details = self.db_manager.get_localita_details(entity_id)
-            if localita_details and localita_details.get('comune_id'):
-                dialog = ModificaLocalitaDialog(self.db_manager, entity_id, localita_details.get('comune_id'), self)
+            if localita_details and localita_details.comune_id:
+                dialog = ModificaLocalitaDialog(self.db_manager, entity_id, localita_details.comune_id, self)
                 if dialog.exec_() == QDialog.Accepted:
                     self._perform_search()
             else:
@@ -709,10 +709,10 @@ class UnifiedFuzzySearchWidget(QWidget):
         entity_id = self._get_entity_id_from_table(self.immobili_table, index)
         if entity_id:
             immobile_details = self.db_manager.get_immobile_details(entity_id)
-            if immobile_details and immobile_details.get('partita_id'):
-                partita_details = self.db_manager.get_partita_details(immobile_details.get('partita_id'))
-                if partita_details and partita_details.get('comune_id'):
-                    dialog = ModificaImmobileDialog(self.db_manager, entity_id, partita_details.get('comune_id'), self)
+            if immobile_details and immobile_details.partita_id:
+                partita_details = self.db_manager.get_partita_details(immobile_details.partita_id)
+                if partita_details and partita_details.comune_id:
+                    dialog = ModificaImmobileDialog(self.db_manager, entity_id, partita_details.comune_id, self)
                     if dialog.exec_() == QDialog.Accepted:
                         self._perform_search()
                 else:

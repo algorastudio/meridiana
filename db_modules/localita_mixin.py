@@ -12,6 +12,7 @@ import uuid
 import os
 import shutil # Per trovare i percorsi degli eseguibili
 from contextlib import contextmanager
+from models.localita import Localita
 from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication, 
                              QCheckBox, QComboBox, QDateEdit, QDateTimeEdit,
                              QDialog, QDialogButtonBox, QDoubleSpinBox,
@@ -47,7 +48,7 @@ class DBDataError(DBMError):
     pass
 
 class LocalitaMixin:
-    def get_elenco_localita_per_esportazione(self, comune_id: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_elenco_localita_per_esportazione(self, comune_id: Optional[int] = None) -> List[Localita]:
         """Recupera un elenco completo di località per l'esportazione."""
         query = f"""
             SELECT l.id, l.nome, tl.nome AS tipo, c.nome AS comune_nome
@@ -64,11 +65,11 @@ class LocalitaMixin:
             with self._get_connection() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                     cur.execute(query, params)
-                    return [dict(row) for row in cur.fetchall()]
+                    return [Localita.from_dict(dict(row)) for row in cur.fetchall()]
         except Exception as e:
             raise DBMError(f"Impossibile recuperare l'elenco delle località: {e}") from e
     
-    def get_localita_by_comune(self, comune_id: int, filter_text: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_localita_by_comune(self, comune_id: int, filter_text: Optional[str] = None) -> List[Localita]:
         """Recupera località per comune_id, unendo il nome del tipo dalla nuova tabella."""
         if not isinstance(comune_id, int) or comune_id <= 0:
             raise DBDataError("ID comune non valido.")
@@ -96,7 +97,7 @@ class LocalitaMixin:
             with self._get_connection() as conn:
                 with conn.cursor(cursor_factory=DictCursor) as cur:
                     cur.execute(query, tuple(params))
-                    results = [dict(row) for row in cur.fetchall()]
+                    results = [Localita.from_dict(dict(row)) for row in cur.fetchall()]
                     self.logger.info(f"Recuperate {len(results)} località per comune ID {comune_id} (filtro: '{filter_text}').")
                     return results
         except Exception as e:
@@ -135,12 +136,12 @@ class LocalitaMixin:
             self.logger.error(f"Errore in create_localita per '{nome}': {e}", exc_info=True)
             raise DBMError(f"Errore database durante l'operazione sulla località: {e}") from e
 
-    def get_localita_details(self, localita_id: int) -> Optional[Dict[str, Any]]:
+    def get_localita_details(self, localita_id: int) -> Optional[Localita]:
         """Recupera i dettagli di una singola località, incluso il nome del comune."""
         if not isinstance(localita_id, int) or localita_id <= 0: return None
 
         query = f"""
-            SELECT loc.id, loc.nome, tl.nome AS tipo, loc.comune_id, com.nome AS comune_nome
+            SELECT loc.id, loc.nome, tl.nome AS tipo, loc.tipo_id, loc.comune_id, com.nome AS comune_nome
             FROM {self.schema}.localita loc
             LEFT JOIN {self.schema}.tipo_localita tl ON loc.tipo_id = tl.id
             JOIN {self.schema}.comune com ON loc.comune_id = com.id
@@ -151,7 +152,7 @@ class LocalitaMixin:
                 with conn.cursor(cursor_factory=DictCursor) as cur:
                     cur.execute(query, (localita_id,))
                     result = cur.fetchone()
-                    return dict(result) if result else None
+                    return Localita.from_dict(dict(result)) if result else None
         except Exception as e:
             self.logger.error(f"Errore DB in get_localita_details per ID {localita_id}: {e}", exc_info=True)
             return None

@@ -12,6 +12,7 @@ import uuid
 import os
 import shutil # Per trovare i percorsi degli eseguibili
 from contextlib import contextmanager
+from models.partita import Partita
 from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication, 
                              QCheckBox, QComboBox, QDateEdit, QDateTimeEdit,
                              QDialog, QDialogButtonBox, QDoubleSpinBox,
@@ -263,7 +264,7 @@ class PartiteMixin:
                 raise DBMError("Impossibile recuperare le partite per il possessore.") from e
     
 
-    def get_partite_by_comune(self, comune_id: int, filter_text: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_partite_by_comune(self, comune_id: int, filter_text: Optional[str] = None) -> List[Partita]:
         """Recupera le partite per un dato comune con un filtro opzionale."""
         if not isinstance(comune_id, int) or comune_id <= 0:
             raise DBDataError("ID comune non valido.")
@@ -290,13 +291,13 @@ class PartiteMixin:
             with self._get_connection() as conn:
                 with conn.cursor(cursor_factory=DictCursor) as cur:
                     cur.execute(query, tuple(params))
-                    partite_list = [dict(row) for row in cur.fetchall()]
+                    partite_list = [Partita.from_dict(dict(row)) for row in cur.fetchall()]
                     self.logger.info(f"Recuperate {len(partite_list)} partite per comune ID {comune_id}.")
                     return partite_list
         except Exception as e:
             self.logger.error(f"Errore DB in get_partite_by_comune: {e}", exc_info=True)
             raise DBMError(f"Errore di sistema durante il recupero delle partite: {e}") from e
-    def get_partita_details(self, partita_id: int) -> Optional[Dict[str, Any]]:
+    def get_partita_details(self, partita_id: int) -> Optional[Partita]:
         """Recupera dettagli completi di una partita, usando una singola connessione e transazione."""
         if not isinstance(partita_id, int) or partita_id <= 0:
             return None
@@ -351,11 +352,9 @@ class PartiteMixin:
                     cur.execute(query_var, (partita_id, partita_id))
                     partita_details['variazioni'] = [dict(row) for row in cur.fetchall()]
 
-            self.logger.info(f"Dettagli completi recuperati per partita ID {partita_id}.")
-            return partita_details
-
+                    return Partita.from_dict(partita_details)
         except Exception as e:
-            self.logger.error(f"Errore DB in get_partita_details (ID: {partita_id}): {e}", exc_info=True)
+            self.logger.error(f"Errore DB nel recupero dettagli completi partita (ID: {partita_id}): {e}", exc_info=True)
             return None
     def update_partita(self, partita_id: int, dati_modificati: Dict[str, Any]) -> bool:
         """Aggiorna i dati di una partita esistente in modo transazionale e sicuro."""

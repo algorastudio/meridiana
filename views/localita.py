@@ -164,9 +164,9 @@ class InserimentoLocalitaWidget(QWidget):
                 return
             self.localita_table.setRowCount(len(localita_list))
             for i, loc in enumerate(localita_list):
-                self.localita_table.setItem(i, 0, QTableWidgetItem(str(loc.get('id', ''))))
-                self.localita_table.setItem(i, 1, QTableWidgetItem(loc.get('nome', '') or ''))
-                self.localita_table.setItem(i, 2, QTableWidgetItem(loc.get('tipo', '') or ''))
+                self.localita_table.setItem(i, 0, QTableWidgetItem(str(loc.id or '')))
+                self.localita_table.setItem(i, 1, QTableWidgetItem(loc.nome or ''))
+                self.localita_table.setItem(i, 2, QTableWidgetItem(loc.tipo or ''))
             self.localita_table.resizeColumnsToContents()
         except Exception as e:
             logging.getLogger("CatastoGUI").error(

@@ -915,11 +915,11 @@ class OperazioniPartitaWidget(QWidget):
         partita_details = self.db_manager.get_partita_details(partita_id_dest)
 
         if partita_details:
-            stato = partita_details.get('stato')
-            comune = partita_details.get('comune_nome', 'N/D')
-            numero = partita_details.get('numero_partita', 'N/D')
-            # --- AGGIUNTA LETTURA SUFFISSO ---
-            suffisso = partita_details.get('suffisso_partita')
+            stato = partita_details.stato
+            comune = partita_details.comune_nome or 'N/D'
+            numero = partita_details.numero_partita
+            # Usa il suffisso, se non c'è stringa vuota
+            suffisso = partita_details.suffisso_partita
             suffisso_display = f" (suffisso: {suffisso})" if suffisso else ""
 
             if self.selected_partita_id_source is not None and partita_id_dest == self.selected_partita_id_source:
@@ -1069,16 +1069,14 @@ class OperazioniPartitaWidget(QWidget):
             partita_details = self.db_manager.get_partita_details(
                 self.selected_partita_id_source)
             if partita_details:
-                self.selected_partita_comune_id_source = partita_details.get(
-                    'comune_id')  # Salva per uso futuro
-                self.selected_partita_comune_nome_source = partita_details.get(
-                    'comune_nome', 'N/D')
+                self.selected_partita_comune_id_source = partita_details.comune_id
+                self.selected_partita_comune_nome_source = partita_details.comune_nome
 
                 self.source_partita_info_label.setText(
-                    f"Partita Sorgente: N. {partita_details.get('numero_partita')} "
+                    f"Partita Sorgente: N. {partita_details.numero_partita} "
                     f"(Comune: {self.selected_partita_comune_nome_source} [ID: {self.selected_partita_comune_id_source}], Partita ID: {self.selected_partita_id_source})"
                 )
-                immobili = partita_details.get('immobili', [])
+                immobili = partita_details.immobili
 
                 # Popola la tabella immobili nel tab "Trasferisci Immobile"
                 if hasattr(self, '_carica_immobili_partita_sorgente'):
@@ -1364,24 +1362,23 @@ class OperazioniPartitaWidget(QWidget):
                 "Aggiunta possessore per PP annullata (selezione/creazione).")
             return
 
-        if not possessore_info_completa_sel or possessore_info_completa_sel.get('id') is None:
+        if not possessore_info_completa_sel or possessore_info_completa_sel.id is None:
             QMessageBox.warning(
                 self, "Errore", "Dati del possessore non validi.")
             return
 
         dettagli_leg = DettagliLegamePossessoreDialog.get_details_for_new_legame(
-            nome_possessore=possessore_info_completa_sel.get(
-                "nome_completo", "N/D"),
+            nome_possessore=possessore_info_completa_sel.nome_completo,
             tipo_partita_attuale='principale', parent=self
         )
         if dettagli_leg:
             self._pp_temp_nuovi_possessori.append({
-                "possessore_id": possessore_info_completa_sel.get("id"),
-                "nome_completo": possessore_info_completa_sel.get("nome_completo"),
-                "cognome_nome": possessore_info_completa_sel.get("cognome_nome"),
-                "paternita": possessore_info_completa_sel.get("paternita"),
-                "comune_riferimento_id": possessore_info_completa_sel.get("comune_riferimento_id"),
-                "attivo": possessore_info_completa_sel.get("attivo", True),
+                "possessore_id": possessore_info_completa_sel.id,
+                "nome_completo": possessore_info_completa_sel.nome_completo,
+                "cognome_nome": possessore_info_completa_sel.cognome_nome,
+                "paternita": possessore_info_completa_sel.paternita,
+                "comune_riferimento_id": possessore_info_completa_sel.comune_id,
+                "attivo": possessore_info_completa_sel.attivo,
                 "titolo": dettagli_leg["titolo"],
                 "quota": dettagli_leg["quota"]
             })

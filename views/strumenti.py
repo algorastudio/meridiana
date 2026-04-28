@@ -224,20 +224,27 @@ class EsportazioniWidget(LazyLoadedWidget):
         self.log_status(f"Recupero dati per '{export_type}' del comune ID {comune_id}...")
         QApplication.processEvents()
 
+        from dataclasses import is_dataclass, asdict
+        
+        raw_data = None
         if export_type == "Elenco Possessori":
-            return self.db_manager.get_possessori_by_comune(comune_id)
+            raw_data = self.db_manager.get_possessori_by_comune(comune_id)
         elif export_type == "Elenco Partite":
-            return self.db_manager.get_partite_by_comune(comune_id)
+            raw_data = self.db_manager.get_partite_by_comune(comune_id)
         # --- INIZIO NUOVA LOGICA ---
         elif export_type == "Elenco Immobili":
-            return self.db_manager.get_elenco_immobili_per_esportazione(comune_id)
+            raw_data = self.db_manager.get_elenco_immobili_per_esportazione(comune_id)
         elif export_type == "Elenco Località":
-            return self.db_manager.get_elenco_localita_per_esportazione(comune_id)
+            raw_data = self.db_manager.get_elenco_localita_per_esportazione(comune_id)
         elif export_type == "Elenco Variazioni":
-            return self.db_manager.get_elenco_variazioni_per_esportazione(comune_id)
+            raw_data = self.db_manager.get_elenco_variazioni_per_esportazione(comune_id)
         elif export_type == "Report Consistenza Patrimoniale":
             return self.db_manager.get_report_consistenza_patrimoniale(comune_id)
-        return None
+            
+        if not raw_data:
+            return None
+            
+        return [asdict(item) if is_dataclass(item) else item for item in raw_data]
     
 # In gui_widgets.py, all'interno della classe EsportazioniWidget
 
@@ -648,8 +655,8 @@ class ReportisticaWidget(LazyLoadedWidget):
 
     def search_possessore(self):
         dialog = PossessoreSelectionDialog(db_manager=self.db_manager, comune_id=None, parent=self)
-        if dialog.exec_() == QDialog.Accepted and dialog.selected_possessore:
-            self.possessore_id_edit.setValue(dialog.selected_possessore.get('id', 0))
+        if dialog.exec_() == QDialog.Accepted and hasattr(dialog, 'selected_possessore') and dialog.selected_possessore:
+            self.possessore_id_edit.setValue(dialog.selected_possessore.id)
 
     def generate_report_proprieta(self):
         partita_id = self.partita_id_edit.value()

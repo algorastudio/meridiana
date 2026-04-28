@@ -12,6 +12,7 @@ import uuid
 import os
 import shutil # Per trovare i percorsi degli eseguibili
 from contextlib import contextmanager
+from models.immobile import Immobile
 from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication, 
                              QCheckBox, QComboBox, QDateEdit, QDateTimeEdit,
                              QDialog, QDialogButtonBox, QDoubleSpinBox,
@@ -47,7 +48,7 @@ class DBDataError(DBMError):
     pass
 
 class ImmobiliMixin:
-    def get_immobili_by_comune(self, comune_id: int) -> List[Dict[str, Any]]:
+    def get_immobili_by_comune(self, comune_id: int) -> List[Immobile]:
         """Recupera un elenco di tutti gli immobili presenti in un dato comune."""
         if not isinstance(comune_id, int) or comune_id <= 0:
             return []
@@ -72,12 +73,12 @@ class ImmobiliMixin:
             with self._get_connection() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                     cur.execute(query, (comune_id,))
-                    return [dict(row) for row in cur.fetchall()]
+                    return [Immobile.from_dict(dict(row)) for row in cur.fetchall()]
         except Exception as e:
             self.logger.error(f"Errore DB in get_immobili_by_comune per comune ID {comune_id}: {e}", exc_info=True)
             return []
     
-    def get_elenco_immobili_per_esportazione(self, comune_id: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_elenco_immobili_per_esportazione(self, comune_id: Optional[int] = None) -> List[Immobile]:
         """Recupera un elenco completo di immobili per l'esportazione."""
         query = f"""
             SELECT 
@@ -100,7 +101,7 @@ class ImmobiliMixin:
             with self._get_connection() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                     cur.execute(query, params)
-                    return [dict(row) for row in cur.fetchall()]
+                    return [Immobile.from_dict(dict(row)) for row in cur.fetchall()]
         except Exception as e:
             raise DBMError(f"Impossibile recuperare l'elenco degli immobili: {e}") from e
 
@@ -151,18 +152,19 @@ class ImmobiliMixin:
                 self.pool.putconn(conn)
     def search_immobili(self, partita_id: Optional[int] = None, comune_id: Optional[int] = None, # Usa comune_id
                         localita_id: Optional[int] = None, natura: Optional[str] = None,
-                        classificazione: Optional[str] = None) -> List[Dict]:
+                        classificazione: Optional[str] = None) -> List[Immobile]:
         """Chiama la funzione SQL cerca_immobili (MODIFICATA per comune_id)."""
         try:
             # Funzione SQL aggiornata per comune_id
             query = "SELECT * FROM cerca_immobili(%s, %s, %s, %s, %s)"
             params = (partita_id, comune_id, localita_id, natura, classificazione) # Passa ID
-            if self.execute_query(query, params): return self.fetchall()
+            if self.execute_query(query, params): 
+                return [Immobile.from_dict(dict(row)) for row in self.fetchall()]
         except psycopg2.Error as db_err: logger.error(f"Errore DB in search_immobili: {db_err}")
         except Exception as e: logger.error(f"Errore Python in search_immobili: {e}")
         return []
 
-    def get_immobile_details(self, immobile_id: int) -> Optional[Dict[str, Any]]:
+    def get_immobile_details(self, immobile_id: int) -> Optional[Immobile]:
         """Recupera i dettagli completi di un singolo immobile in modo sicuro."""
         if not isinstance(immobile_id, int) or immobile_id <= 0:
             self.logger.error(f"get_immobile_details: immobile_id non valido: {immobile_id}")
@@ -189,7 +191,7 @@ class ImmobiliMixin:
                     immobile_data = cur.fetchone()
                     if immobile_data:
                         self.logger.info(f"Dettagli recuperati per immobile ID {immobile_id}.")
-                        return dict(immobile_data)
+                        return Immobile.from_dict(dict(immobile_data))
                     else:
                         self.logger.warning(f"Nessun immobile trovato con ID {immobile_id}.")
                         return None
@@ -256,7 +258,7 @@ class ImmobiliMixin:
                                       nome_possessore_search: Optional[str] = None,
                                       data_inizio_possesso_search: Optional[date] = None, # Previsto per il futuro
                                       data_fine_possesso_search: Optional[date] = None    # Previsto per il futuro
-                                     ) -> List[Dict[str, Any]]:
+                                     ) -> List[Immobile]:
         try:
             with self._get_connection() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
@@ -279,7 +281,7 @@ class ImmobiliMixin:
 
                     self.logger.debug(f"Chiamata a {self.schema}.ricerca_avanzata_immobili con parametri POSIZIONALI: {params}")
                     cur.execute(query, params)
-                    results = [dict(row) for row in cur.fetchall()]
+                    results = [Immobile.from_dict(dict(row)) for row in cur.fetchall()]
                     self.logger.info(f"Ricerca avanzata immobili ha restituito {len(results)} risultati.")
                     return results
         except psycopg2.Error as e:

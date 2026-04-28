@@ -12,6 +12,7 @@ import uuid
 import os
 import shutil # Per trovare i percorsi degli eseguibili
 from contextlib import contextmanager
+from models.comune import Comune
 from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication, 
                              QCheckBox, QComboBox, QDateEdit, QDateTimeEdit,
                              QDialog, QDialogButtonBox, QDoubleSpinBox,
@@ -171,8 +172,8 @@ class ComuniMixin:
                 logger.error(f"Errore Python generico in registra_comune_nel_db per '{nome}': {e}")
                 self.rollback()
                 return None
-    def get_comuni(self, search_term: Optional[str] = None) -> List[Dict[str, Any]]:
-        query = f"SELECT id, nome, provincia, regione FROM {self.schema}.comune"
+    def get_comuni(self, search_term: Optional[str] = None) -> List[Comune]:
+        query = f"SELECT id, nome AS nome_comune, provincia, regione FROM {self.schema}.comune"
         params = []
         if search_term:
             query += " WHERE nome ILIKE %s"
@@ -185,14 +186,14 @@ class ComuniMixin:
                     cur.execute(query, params)
                     results = cur.fetchall()
                     self.logger.info(f"Recuperati {len(results)} comuni (search_term: '{search_term}').")
-                    return [dict(row) for row in results]
+                    return [Comune.from_dict(dict(row)) for row in results]
         except Exception as e:
             self.logger.error(f"Errore DB in get_comuni: {e}", exc_info=True)
             # In caso di errore, restituisce una lista vuota per non bloccare la UI
             return []
     
     # In catasto_db_manager.py, dentro la classe CatastoDBManager
-    def get_all_comuni_details(self):
+    def get_all_comuni_details(self) -> List[Comune]:
         self.logger.info(">>> ESECUZIONE di get_all_comuni_details...")
         
         # --- QUERY AGGIORNATA PER SELEZIONARE TUTTE LE COLONNE NECESSARIE ---
@@ -218,8 +219,8 @@ class ComuniMixin:
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                     cur.execute(query)
                     results = cur.fetchall()
-                    self.logger.info(f"--- RISULTATO RICEVUTO da db_manager: Tipo={type(results)}, Lunghezza={len(results)} ---")
-                    return results
+                    self.logger.info(f"--- RISULTATO RICEVUTO da db_manager: Lunghezza={len(results)} ---")
+                    return [Comune.from_dict(dict(row)) for row in results]
         except (Exception, psycopg2.Error) as error:
             self.logger.error(f"Errore DB in get_all_comuni_details: {error}", exc_info=True)
             return [] # Restituisci una lista vuota in caso di errore
@@ -244,7 +245,7 @@ class ComuniMixin:
             raise DBMError("Impossibile recuperare l'elenco dei comuni.") from e
     # In catasto_db_manager.py, sostituisci la vecchia funzione con questa:
 
-    def get_comune_by_id(self, comune_id: int) -> Optional[Dict[str, Any]]:
+    def get_comune_by_id(self, comune_id: int) -> Optional[Comune]:
         """Recupera i dettagli di un comune tramite il suo ID."""
         if not isinstance(comune_id, int) or comune_id <= 0:
             self.logger.error(f"get_comune_by_id: ID comune non valido: {comune_id}")
@@ -252,7 +253,7 @@ class ComuniMixin:
         
         query = f"""
             SELECT id, nome AS nome_comune, provincia, regione, codice_catastale, periodo_id,
-                   data_istituzione, data_soppressione, note
+                   data_istituzione, data_soppressione, note, data_creazione, data_modifica
             FROM {self.schema}.comune
             WHERE id = %s;
         """
@@ -261,7 +262,7 @@ class ComuniMixin:
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                     cur.execute(query, (comune_id,))
                     result = cur.fetchone()
-                    return dict(result) if result else None
+                    return Comune.from_dict(dict(result)) if result else None
         except Exception as e:
             self.logger.error(f"Errore DB in get_comune_by_id (ID: {comune_id}): {e}", exc_info=True)
             return None
