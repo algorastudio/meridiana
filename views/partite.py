@@ -13,7 +13,6 @@ from PyQt5.QtCore import (QDate, QDateTime, QPoint, QProcess, QSettings,
                           pyqtSlot, QThread)
 from PyQt5.QtGui import (QCloseEvent, QColor, QDesktopServices, QFont, 
                          QIcon, QPalette, QPixmap)
-from PyQt5.QtWebEngineWidgets import os,csv,sys,logging
 from workers import GenericDBThread
 from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication, 
                              QCheckBox, QComboBox, QDateEdit, QDateTimeEdit,
