@@ -41,3 +41,24 @@ class CSVImportThread(QThread):
         except Exception as e:
             # Cattura qualsiasi errore DB o di file e lo passa alla GUI
             self.error_signal.emit(str(e))
+
+class GenericDBThread(QThread):
+    """
+    Thread generico per eseguire in background qualsiasi funzione (es. query DB) 
+    per non bloccare la GUI.
+    """
+    finished_signal = pyqtSignal(object)  # Restituisce i risultati (es. list, dict, bool)
+    error_signal = pyqtSignal(str)        # Restituisce l'eventuale errore in formato stringa
+
+    def __init__(self, func, *args, parent=None, **kwargs):
+        super().__init__(parent)
+        self.func = func
+        self.args = args
+        self.kwargs = kwargs
+
+    def run(self):
+        try:
+            results = self.func(*self.args, **self.kwargs)
+            self.finished_signal.emit(results)
+        except Exception as e:
+            self.error_signal.emit(str(e))

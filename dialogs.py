@@ -834,19 +834,17 @@ class PartitaDetailsDialog(QDialog):
             if documenti_list:
                 self.documents_table.setRowCount(len(documenti_list))
                 for row, doc_data in enumerate(documenti_list):
-                    self.documents_table.setItem(row, 0, QTableWidgetItem(str(doc_data.get('documento_id', ''))))
-                    self.documents_table.setItem(row, 1, QTableWidgetItem(doc_data.get('titolo', '')))
-                    self.documents_table.setItem(row, 2, QTableWidgetItem(doc_data.get('tipo_documento', '')))
-                    self.documents_table.setItem(row, 3, QTableWidgetItem(str(doc_data.get('anno', ''))))
-                    self.documents_table.setItem(row, 4, QTableWidgetItem(doc_data.get('rilevanza', '')))
+                    self.documents_table.setItem(row, 0, QTableWidgetItem(str(doc_data.id)))
+                    self.documents_table.setItem(row, 1, QTableWidgetItem(doc_data.titolo or ''))
+                    self.documents_table.setItem(row, 2, QTableWidgetItem(doc_data.tipo_documento or ''))
+                    self.documents_table.setItem(row, 3, QTableWidgetItem(str(doc_data.anno or '')))
+                    self.documents_table.setItem(row, 4, QTableWidgetItem(doc_data.rilevanza or ''))
                     
                     # Percorso, con un tooltip che mostra il percorso completo
-                    percorso_file_full = doc_data.get('percorso_file', 'N/D')
+                    percorso_file_full = doc_data.percorso_file or ''
                     path_item = QTableWidgetItem(os.path.basename(percorso_file_full) if percorso_file_full else "N/D")
                     path_item.setToolTip(percorso_file_full) # Il tooltip mostrerà il percorso completo
                     # Salva il percorso completo nell'UserRole per il pulsante "Apri"
-                    percorso_file_full = doc_data.get('percorso_file', '')
-                    path_item = QTableWidgetItem(os.path.basename(percorso_file_full) if percorso_file_full else "N/D")
                     path_item.setData(Qt.UserRole, percorso_file_full)  # Assicurati che questo sia sempre una stringa valida
                     self.documents_table.setItem(row, 5, path_item)
                 self.documents_table.resizeColumnsToContents()
@@ -1628,32 +1626,32 @@ class ModificaPartitaDialog(QDialog):
             if documenti:
                 self.documents_table.setRowCount(len(documenti))
                 for row, doc in enumerate(documenti):
-                    documento_id_storico = doc.get("documento_id")
+                    documento_id_storico = doc.id
                     
                     # --- INIZIO CORREZIONE: Salvataggio dati robusto ---
             # Salviamo un dizionario con gli ID di relazione nell'UserRole
                     rel_data = {
-                        'doc_id': doc.get('rel_documento_id'),
-                        'partita_id': doc.get('rel_partita_id')
+                        'doc_id': doc.rel_documento_id,
+                        'partita_id': doc.rel_partita_id
                     }
 
                     # L'item nella prima colonna conterrà tutti i dati per la riga
-                    item_doc_id = QTableWidgetItem(str(doc.get('documento_id', '')))
+                    item_doc_id = QTableWidgetItem(str(doc.id))
                     item_doc_id.setData(Qt.UserRole, rel_data)
                     self.documents_table.setItem(row, 0, item_doc_id)
             # --- FINE CORREZIONE ---
                     # Salviamo l'ID del documento storico e l'ID della partita per la rimozione del legame
-                    item_doc_id.setData(Qt.UserRole + 1, doc.get("dp_documento_id")) # ID del documento storico nella relazione
-                    item_doc_id.setData(Qt.UserRole + 2, doc.get("dp_partita_id")) # ID della partita nella relazione (che è self.partita_id)
+                    item_doc_id.setData(Qt.UserRole + 1, doc.rel_documento_id) # ID del documento storico nella relazione
+                    item_doc_id.setData(Qt.UserRole + 2, doc.rel_partita_id) # ID della partita nella relazione (che è self.partita_id)
                     
                     
-                    self.documents_table.setItem(row, 1, QTableWidgetItem(doc.get("titolo") or ''))
-                    self.documents_table.setItem(row, 2, QTableWidgetItem(doc.get("tipo_documento") or ''))
-                    self.documents_table.setItem(row, 3, QTableWidgetItem(str(doc.get("anno", '')) or ''))
-                    self.documents_table.setItem(row, 4, QTableWidgetItem(doc.get("rilevanza") or ''))
+                    self.documents_table.setItem(row, 1, QTableWidgetItem(doc.titolo or ''))
+                    self.documents_table.setItem(row, 2, QTableWidgetItem(doc.tipo_documento or ''))
+                    self.documents_table.setItem(row, 3, QTableWidgetItem(str(doc.anno or '')))
+                    self.documents_table.setItem(row, 4, QTableWidgetItem(doc.rilevanza or ''))
                     
                     # CORREZIONE: Assicurati che il percorso sia salvato correttamente nell'UserRole
-                    percorso_file_full = doc.get("percorso_file") or ''
+                    percorso_file_full = doc.percorso_file or ''
                     path_item = QTableWidgetItem(os.path.basename(percorso_file_full) if percorso_file_full else "N/D")
                     path_item.setData(Qt.UserRole, percorso_file_full) # Salva percorso completo per l'apertura
                     self.documents_table.setItem(row, 5, path_item)

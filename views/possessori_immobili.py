@@ -25,6 +25,7 @@ from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication,
                              QSpinBox, QStyle, QStyleFactory, QTabWidget,
                              QTableWidget, QTableWidgetItem, QTextEdit,
                              QVBoxLayout, QWidget,QProgressDialog,QTextBrowser,QSlider, QCompleter,QSplitter)
+from workers import GenericDBThread
 from config import (
     SETTINGS_DB_TYPE, SETTINGS_DB_HOST, SETTINGS_DB_PORT, 
     SETTINGS_DB_NAME, SETTINGS_DB_USER, SETTINGS_DB_SCHEMA,
@@ -481,78 +482,98 @@ class RicercaAvanzataImmobiliWidget(QWidget):
         print("-" * 30)
         # --- FINE STAMPE DI DEBUG ---
 
-        try:
-            immobili_trovati = self.db_manager.ricerca_avanzata_immobili_gui(
-                comune_id=p_comune_id,
-                localita_id=p_localita_id,
-                natura_search=p_natura,
-                classificazione_search=p_classificazione,
-                consistenza_search=p_consistenza_search,
-                piani_min=p_piani_min,
-                piani_max=p_piani_max,
-                vani_min=p_vani_min,
-                vani_max=p_vani_max,
-                nome_possessore_search=p_nome_possessore,
-                data_inizio_possesso_search=None,  # Non ancora in GUI
-                data_fine_possesso_search=None    # Non ancora in GUI
-            )
+        # Disabilita temporaneamente la tabella e il bottone per mostrare il caricamento
+        self.btn_esegui_ricerca_immobili.setEnabled(False)
+        self.risultati_immobili_table.setEnabled(False)
+        self.risultati_immobili_table.setRowCount(1)
+        item = QTableWidgetItem("Ricerca in corso...")
+        item.setTextAlignment(Qt.AlignCenter)
+        self.risultati_immobili_table.setItem(0, 0, item)
+        self.risultati_immobili_table.setSpan(0, 0, 1, self.risultati_immobili_table.columnCount())
 
-            self.risultati_immobili_table.setRowCount(0)
-            if immobili_trovati:
-                self.risultati_immobili_table.setRowCount(
-                    len(immobili_trovati))
-                for row_idx, immobile in enumerate(immobili_trovati):
-                    col = 0
-                    self.risultati_immobili_table.setItem(
-                        row_idx, col, QTableWidgetItem(str(immobile.get('id_immobile', ''))))
-                    col += 1
-                    self.risultati_immobili_table.setItem(
-                        row_idx, col, QTableWidgetItem(str(immobile.get('numero_partita', ''))))
-                    col += 1
-                    self.risultati_immobili_table.setItem(
-                        row_idx, col, QTableWidgetItem(immobile.get('comune_nome', '')))
-                    col += 1
-                    localita_display = f"{immobile.get('localita_nome', '')}"
-                    if immobile.get('localita_tipo'):
-                        localita_display += f" ({immobile.get('localita_tipo')})"
-                    self.risultati_immobili_table.setItem(
-                        row_idx, col, QTableWidgetItem(localita_display.strip()))
-                    col += 1
-                    self.risultati_immobili_table.setItem(
-                        row_idx, col, QTableWidgetItem(immobile.get('natura', '')))
-                    col += 1
-                    self.risultati_immobili_table.setItem(
-                        row_idx, col, QTableWidgetItem(immobile.get('classificazione', '')))
-                    col += 1
-                    self.risultati_immobili_table.setItem(
-                        row_idx, col, QTableWidgetItem(immobile.get('consistenza', '')))
-                    col += 1
-                    self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(str(
-                        immobile.get('numero_piani', '')) if immobile.get('numero_piani') is not None else ''))
-                    col += 1
-                    self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(str(
-                        immobile.get('numero_vani', '')) if immobile.get('numero_vani') is not None else ''))
-                    col += 1
-                    self.risultati_immobili_table.setItem(
-                        row_idx, col, QTableWidgetItem(immobile.get('possessori_attuali', '')))
-                    col += 1  # Campo dalla funzione SQL
+        # Avvio del thread in background
+        self.worker = GenericDBThread(
+            self.db_manager.ricerca_avanzata_immobili_gui,
+            comune_id=p_comune_id,
+            localita_id=p_localita_id,
+            natura_search=p_natura,
+            classificazione_search=p_classificazione,
+            consistenza_search=p_consistenza_search,
+            piani_min=p_piani_min,
+            piani_max=p_piani_max,
+            vani_min=p_vani_min,
+            vani_max=p_vani_max,
+            nome_possessore_search=p_nome_possessore,
+            data_inizio_possesso_search=None,  # Non ancora in GUI
+            data_fine_possesso_search=None    # Non ancora in GUI
+        )
+        self.worker.finished_signal.connect(self._on_ricerca_effettiva_finished)
+        self.worker.error_signal.connect(self._on_ricerca_effettiva_error)
+        self.worker.start()
 
-                # self.risultati_immobili_table.resizeColumnsToContents() # Potrebbe essere lento con molti dati
-                QMessageBox.information(
-                    self, "Ricerca Completata", f"Trovati {len(immobili_trovati)} immobili.")
-            else:
-                QMessageBox.information(
-                    self, "Ricerca Completata", "Nessun immobile trovato con i criteri specificati.")
-        except AttributeError as ae:
-            logging.getLogger("CatastoGUI").error(
-                f"Metodo di ricerca immobili non trovato nel db_manager: {ae}", exc_info=True)
-            QMessageBox.critical(
-                self, "Errore Interno", f"Funzionalità di ricerca non implementata correttamente nel gestore DB: {ae}")
-        except Exception as e:
-            logging.getLogger("CatastoGUI").error(
-                f"Errore durante la ricerca avanzata immobili: {e}", exc_info=True)
-            QMessageBox.critical(self, "Errore Ricerca",
-                                 f"Si è verificato un errore imprevisto: {e}")
+    def _on_ricerca_effettiva_finished(self, immobili_trovati):
+        # Ripristina UI
+        self.btn_esegui_ricerca_immobili.setEnabled(True)
+        self.risultati_immobili_table.setEnabled(True)
+        self.risultati_immobili_table.clearSpans()
+        self.risultati_immobili_table.setRowCount(0)
+
+        if immobili_trovati:
+            self.risultati_immobili_table.setRowCount(
+                len(immobili_trovati))
+            for row_idx, immobile in enumerate(immobili_trovati):
+                col = 0
+                self.risultati_immobili_table.setItem(
+                    row_idx, col, QTableWidgetItem(str(immobile.get('id_immobile', ''))))
+                col += 1
+                self.risultati_immobili_table.setItem(
+                    row_idx, col, QTableWidgetItem(str(immobile.get('numero_partita', ''))))
+                col += 1
+                self.risultati_immobili_table.setItem(
+                    row_idx, col, QTableWidgetItem(immobile.get('comune_nome', '')))
+                col += 1
+                localita_display = f"{immobile.get('localita_nome', '')}"
+                if immobile.get('localita_tipo'):
+                    localita_display += f" ({immobile.get('localita_tipo')})"
+                self.risultati_immobili_table.setItem(
+                    row_idx, col, QTableWidgetItem(localita_display.strip()))
+                col += 1
+                self.risultati_immobili_table.setItem(
+                    row_idx, col, QTableWidgetItem(immobile.get('natura', '')))
+                col += 1
+                self.risultati_immobili_table.setItem(
+                    row_idx, col, QTableWidgetItem(immobile.get('classificazione', '')))
+                col += 1
+                self.risultati_immobili_table.setItem(
+                    row_idx, col, QTableWidgetItem(immobile.get('consistenza', '')))
+                col += 1
+                self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(str(
+                    immobile.get('numero_piani', '')) if immobile.get('numero_piani') is not None else ''))
+                col += 1
+                self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(str(
+                    immobile.get('numero_vani', '')) if immobile.get('numero_vani') is not None else ''))
+                col += 1
+                self.risultati_immobili_table.setItem(
+                    row_idx, col, QTableWidgetItem(immobile.get('possessori_attuali', '')))
+                col += 1  # Campo dalla funzione SQL
+
+            QMessageBox.information(
+                self, "Ricerca Completata", f"Trovati {len(immobili_trovati)} immobili.")
+        else:
+            QMessageBox.information(
+                self, "Ricerca Completata", "Nessun immobile trovato con i criteri specificati.")
+
+    def _on_ricerca_effettiva_error(self, error_msg):
+        self.btn_esegui_ricerca_immobili.setEnabled(True)
+        self.risultati_immobili_table.setEnabled(True)
+        self.risultati_immobili_table.clearSpans()
+        self.risultati_immobili_table.setRowCount(0)
+        
+        logging.getLogger("CatastoGUI").error(f"Errore durante la ricerca avanzata immobili: {error_msg}")
+        if "non trovata" in error_msg.lower() or "not implemented" in error_msg.lower() or "AttributeError" in error_msg:
+             QMessageBox.critical(self, "Errore Interno", f"Funzionalità di ricerca non implementata correttamente nel gestore DB: {error_msg}")
+        else:
+             QMessageBox.critical(self, "Errore Ricerca", f"Si è verificato un errore imprevisto: {error_msg}")
 
 # In gui_widgets.py, SOSTITUISCI l'intera classe InserimentoComuneWidget con questa:
 

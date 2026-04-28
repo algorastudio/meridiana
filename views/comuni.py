@@ -1,4 +1,6 @@
 import os,csv,sys,logging,json
+from models.comune import Comune
+from workers import GenericDBThread
 from datetime import date, datetime
 from typing import Optional, List, Dict, Any, Tuple, TYPE_CHECKING
 from app_utils import (BulkReportPDF, FPDF_AVAILABLE, _get_default_export_path, 
@@ -139,19 +141,39 @@ class ElencoComuniWidget(LazyLoadedWidget):
         Metodo pubblico per caricare o ricaricare i dati dei comuni nella tabella.
         Questo metodo contiene la logica principale di popolamento.
         """
-        self.logger.info(">>> ESECUZIONE DI load_data in ElencoComuniWidget...")
-        # Il resto del suo codice da _load_data_on_first_show rimane identico qui...
+    def load_data(self):
+        """
+        Popola la tabella comuni richiamando i dati dal DB Manager in modo asincrono.
+        """
+        self.logger.info(">>> ESECUZIONE DI load_data in ElencoComuniWidget (Async)...")
         self.comuni_table.setSortingEnabled(False)
         self.comuni_table.setRowCount(0)
 
-        try:
-            if not self.db_manager:
-                self.logger.error("load_data chiamato ma self.db_manager è None!")
-                return
+        # Disabilita temporaneamente la tabella e mostra il caricamento
+        self.comuni_table.setEnabled(False)
+        self.comuni_table.setRowCount(1)
+        item = QTableWidgetItem("Caricamento in corso...")
+        item.setTextAlignment(Qt.AlignCenter)
+        self.comuni_table.setItem(0, 0, item)
+        self.comuni_table.setSpan(0, 0, 1, self.comuni_table.columnCount())
 
-            self.logger.info(">>> Chiamata a db_manager.get_all_comuni_details() in corso...")
-            comuni_list = self.db_manager.get_all_comuni_details()
-            
+        if not self.db_manager:
+            self.logger.error("load_data chiamato ma self.db_manager è None!")
+            return
+
+        self.logger.info(">>> Avvio thread per db_manager.get_all_comuni_details()...")
+        self.worker = GenericDBThread(self.db_manager.get_all_comuni_details)
+        self.worker.finished_signal.connect(self._on_load_data_finished)
+        self.worker.error_signal.connect(self._on_load_data_error)
+        self.worker.start()
+
+    def _on_load_data_finished(self, comuni_list):
+        # Ripristina lo stato della tabella
+        self.comuni_table.setEnabled(True)
+        self.comuni_table.clearSpans()
+        self.comuni_table.setRowCount(0)
+
+        try:
             self.logger.info(f"--- RISULTATO RICEVUTO da db_manager: Tipo={type(comuni_list)}, Lunghezza={len(comuni_list) if comuni_list is not None else 'None'} ---")
 
             if not comuni_list:
@@ -180,11 +202,17 @@ class ElencoComuniWidget(LazyLoadedWidget):
             self.logger.info(">>> Fine ciclo FOR.")
 
         except Exception as e:
-            self.logger.error(f"Errore imprevisto durante il popolamento della tabella comuni: {e}", exc_info=True)
-            QMessageBox.critical(self, "Errore Caricamento Dati", f"Si è verificato un errore imprevisto: {e}")
+            self._on_load_data_error(str(e))
         finally:
             self.comuni_table.setSortingEnabled(True)
             self.logger.info(">>> load_data terminato.")
+
+    def _on_load_data_error(self, error_msg):
+        self.comuni_table.setEnabled(True)
+        self.comuni_table.clearSpans()
+        self.logger.error(f"Errore imprevisto durante il popolamento della tabella comuni: {error_msg}")
+        QMessageBox.critical(self, "Errore Caricamento Dati", f"Si è verificato un errore imprevisto: {error_msg}")
+        self.comuni_table.setRowCount(0)
 
     def _load_data_on_first_show(self):
         """

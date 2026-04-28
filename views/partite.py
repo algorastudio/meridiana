@@ -13,7 +13,8 @@ from PyQt5.QtCore import (QDate, QDateTime, QPoint, QProcess, QSettings,
                           pyqtSlot, QThread)
 from PyQt5.QtGui import (QCloseEvent, QColor, QDesktopServices, QFont, 
                          QIcon, QPalette, QPixmap)
-from PyQt5.QtWebEngineWidgets import QWebEngineView
+from PyQt5.QtWebEngineWidgets import os,csv,sys,logging
+from workers import GenericDBThread
 from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication, 
                              QCheckBox, QComboBox, QDateEdit, QDateTimeEdit,
                              QDialog, QDialogButtonBox, QDoubleSpinBox,
@@ -69,13 +70,14 @@ class RicercaPartiteWidget(QWidget):
         self.current_page = 1
         self.page_size = 50  # Numero di record per pagina
         self.total_records = 0
-        # --- PANNELLO DI PAGINAZIONE ---
+        # --- PANNELLO DI PAGINAZIONE (Definito qui, ma aggiunto dopo) ---
         self.pagination_layout = QHBoxLayout()
         
         self.btn_prev_page = QPushButton("◄ Precedente")
         self.btn_prev_page.clicked.connect(self._prev_page)
+        self.btn_prev_page.setEnabled(False)
         
-        self.lbl_page_info = QLabel("Pagina 1 di 1")
+        self.lbl_page_info = QLabel("Pagina 1 di 1 (Totale: 0)")
         self.lbl_page_info.setAlignment(Qt.AlignCenter)
         
         # Tendina per la scelta dinamica del limite
@@ -86,6 +88,7 @@ class RicercaPartiteWidget(QWidget):
         
         self.btn_next_page = QPushButton("Successiva ►")
         self.btn_next_page.clicked.connect(self._next_page)
+        self.btn_next_page.setEnabled(False)
         
         self.pagination_layout.addStretch()
         self.pagination_layout.addWidget(self.btn_prev_page)
@@ -95,11 +98,6 @@ class RicercaPartiteWidget(QWidget):
         self.pagination_layout.addWidget(self.combo_page_size)
         self.pagination_layout.addWidget(self.btn_next_page)
         self.pagination_layout.addStretch()
-        
-        # Aggiunge il pannello al layout principale del widget
-        layout.addLayout(self.pagination_layout) 
-        # (NB: se il tuo layout principale si chiama diversamente, usa il nome corretto es. self.main_layout)
-        
 
         # Comune
         comune_label = QLabel("Comune:")
@@ -160,12 +158,13 @@ class RicercaPartiteWidget(QWidget):
         self.results_table.setAlternatingRowColors(True)
         self.results_table.horizontalHeader().setStretchLastSection(True)
         self.results_table.setSelectionBehavior(QTableWidget.SelectRows)
-
-        results_layout.addWidget(self.results_table)
-
         # Dettagli partita selezionata
         self.detail_button = QPushButton("Mostra Dettagli Partita")
         self.detail_button.clicked.connect(self.show_details)
+        
+        # Inserisci i controlli sotto la tabella
+        results_layout.addWidget(self.results_table)
+        results_layout.addLayout(self.pagination_layout)
         results_layout.addWidget(self.detail_button)
 
         results_group.setLayout(results_layout)
@@ -173,7 +172,7 @@ class RicercaPartiteWidget(QWidget):
 
         self.setLayout(layout)
     def load_data(self):
-        """Carica i dati della tabella applicando la paginazione e i filtri testuali."""
+        """Carica i dati della tabella applicando la paginazione e i filtri testuali in modo asincrono."""
         offset = (self.current_page - 1) * self.page_size
         
         comune_id = getattr(self, 'comune_id', None)
@@ -182,38 +181,77 @@ class RicercaPartiteWidget(QWidget):
         possessore = self.possessore_edit.text().strip() or None
         natura = self.natura_edit.text().strip() or None
 
+        # Disabilita temporaneamente la tabella
+        self.results_table.setEnabled(False)
+        self.results_table.setRowCount(1)
+        item = QTableWidgetItem("Caricamento in corso...")
+        item.setTextAlignment(Qt.AlignCenter)
+        self.results_table.setItem(0, 0, item)
+        self.results_table.setSpan(0, 0, 1, self.results_table.columnCount())
+
+        # Avvia il thread
+        self.worker = GenericDBThread(
+            self.db_manager.search_partite_paginate,
+            limit=self.page_size,
+            offset=offset,
+            comune_id=comune_id,
+            numero_partita=numero_partita,
+            possessore=possessore,
+            immobile_natura=natura
+        )
+        self.worker.finished_signal.connect(self._on_load_data_finished)
+        self.worker.error_signal.connect(self._on_load_data_error)
+        self.worker.start()
+
+    def _on_load_data_finished(self, results):
+        # Ripristina la tabella
+        self.results_table.setEnabled(True)
+        self.results_table.clearSpans()
+        self.results_table.setRowCount(0)
+
         try:
-            partite, totale = self.db_manager.search_partite_paginate(
-                limit=self.page_size,
-                offset=offset,
-                comune_id=comune_id,
-                numero_partita=numero_partita,
-                possessore=possessore,
-                immobile_natura=natura
-            )
-            
+            partite, totale = results
             self.total_records = totale
-            self.results_table.setRowCount(0)
             
             if partite:
                 self.results_table.setRowCount(len(partite))
                 for row_idx, partita_data in enumerate(partite):
-                    self.results_table.setItem(row_idx, 0, QTableWidgetItem(str(partita_data.get('id', ''))))
-                    self.results_table.setItem(row_idx, 1, QTableWidgetItem(partita_data.get('comune_nome', '')))
-                    num_partita_str = str(partita_data.get('numero_partita', ''))
-                    suffisso = partita_data.get('suffisso_partita')
+                    # Essendo i dati migrati a Dataclass (o ibridi), gestiamo safe access
+                    id_partita = getattr(partita_data, 'id', partita_data.get('id', '')) if isinstance(partita_data, dict) else partita_data.id
+                    comune_nome = getattr(partita_data, 'comune_nome', partita_data.get('comune_nome', '')) if isinstance(partita_data, dict) else partita_data.comune_nome
+                    numero_partita = getattr(partita_data, 'numero_partita', partita_data.get('numero_partita', '')) if isinstance(partita_data, dict) else partita_data.numero_partita
+                    suffisso = getattr(partita_data, 'suffisso_partita', partita_data.get('suffisso_partita')) if isinstance(partita_data, dict) else partita_data.suffisso_partita
+                    tipo = getattr(partita_data, 'tipo', partita_data.get('tipo', '')) if isinstance(partita_data, dict) else partita_data.tipo
+                    stato = getattr(partita_data, 'stato', partita_data.get('stato', '')) if isinstance(partita_data, dict) else getattr(partita_data, 'stato', '')
+
+                    self.results_table.setItem(row_idx, 0, QTableWidgetItem(str(id_partita)))
+                    self.results_table.setItem(row_idx, 1, QTableWidgetItem(comune_nome or ''))
+                    
+                    num_partita_str = str(numero_partita)
                     if suffisso:
                         num_partita_str = f"{num_partita_str} {suffisso}"
                     self.results_table.setItem(row_idx, 2, QTableWidgetItem(num_partita_str))
-                    self.results_table.setItem(row_idx, 3, QTableWidgetItem(partita_data.get('tipo', '')))
-                    self.results_table.setItem(row_idx, 4, QTableWidgetItem(partita_data.get('stato', '')))
+                    self.results_table.setItem(row_idx, 3, QTableWidgetItem(tipo or ''))
+                    self.results_table.setItem(row_idx, 4, QTableWidgetItem(stato or ''))
                 self.results_table.resizeColumnsToContents()
-            
+            else:
+                self.results_table.setRowCount(1)
+                item = QTableWidgetItem("Nessuna partita trovata.")
+                item.setTextAlignment(Qt.AlignCenter)
+                self.results_table.setItem(0, 0, item)
+                self.results_table.setSpan(0, 0, 1, self.results_table.columnCount())
+
             self._update_pagination_ui()
-            
+
         except Exception as e:
-            logging.getLogger("CatastoGUI").error(f"Errore durante il caricamento paginato delle partite: {e}", exc_info=True)
-            QMessageBox.critical(self, "Errore", f"Impossibile caricare i dati:\n{e}")
+            self._on_load_data_error(str(e))
+
+    def _on_load_data_error(self, error_msg):
+        self.results_table.setEnabled(True)
+        self.results_table.clearSpans()
+        self.results_table.setRowCount(0)
+        logging.getLogger("CatastoGUI").error(f"Errore durante il caricamento paginato delle partite: {error_msg}")
+        QMessageBox.critical(self, "Errore", f"Impossibile caricare i dati:\n{error_msg}")
 
     def _update_pagination_ui(self):
         """Aggiorna l'etichetta e disabilita/abilita i pulsanti in base ai limiti."""

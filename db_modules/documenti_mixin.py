@@ -10,6 +10,7 @@ from typing import List, Dict, Any, Optional, Tuple, Union
 import json
 import uuid
 import os
+from models.documento import Documento
 import shutil # Per trovare i percorsi degli eseguibili
 from contextlib import contextmanager
 from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication, 
@@ -49,13 +50,15 @@ class DBDataError(DBMError):
 class DocumentiMixin:
     def search_historical_documents(self, title: Optional[str] = None, doc_type: Optional[str] = None,
                                     period_id: Optional[int] = None, year_start: Optional[int] = None,
-                                    year_end: Optional[int] = None, partita_id: Optional[int] = None) -> List[Dict]:
+                                    year_end: Optional[int] = None, partita_id: Optional[int] = None) -> List[Documento]:
         """Chiama la funzione SQL ricerca_documenti_storici (SQL aggiornata per join)."""
         try:
             # Funzione SQL aggiornata per join corretti
             query = "SELECT * FROM ricerca_documenti_storici(%s, %s, %s, %s, %s, %s)"
             params = (title, doc_type, period_id, year_start, year_end, partita_id)
-            if self.execute_query(query, params): return self.fetchall()
+            if self.execute_query(query, params): 
+                results = self.fetchall()
+                return [Documento.from_dict(dict(row)) for row in results]
         except psycopg2.Error as db_err: logger.error(f"Errore DB search_historical_documents: {db_err}"); return []
         except Exception as e: logger.error(f"Errore Python search_historical_documents: {e}"); return []
         return []
@@ -137,7 +140,7 @@ class DocumentiMixin:
 
     # In catasto_db_manager.py, SOSTITUISCI il metodo get_documenti_per_partita
 
-    def get_documenti_per_partita(self, partita_id: int) -> List[Dict[str, Any]]:
+    def get_documenti_per_partita(self, partita_id: int) -> List[Documento]:
         """Recupera l'elenco dei documenti associati a una partita in modo sicuro."""
         # --- INIZIO CORREZIONE: Aggiunti dp.documento_id e dp.partita_id alla SELECT ---
         query = f"""
@@ -157,7 +160,7 @@ class DocumentiMixin:
             with self._get_connection() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                     cur.execute(query, (partita_id,))
-                    documenti = [dict(row) for row in cur.fetchall()]
+                    documenti = [Documento.from_dict(dict(row)) for row in cur.fetchall()]
                     self.logger.info(f"Recuperati {len(documenti)} documenti per partita ID {partita_id}.")
                     return documenti
         except Exception as e:

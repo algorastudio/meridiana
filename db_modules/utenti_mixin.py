@@ -8,8 +8,10 @@ import logging
 from datetime import date, datetime
 from typing import List, Dict, Any, Optional, Tuple, Union
 import json
+import hashlib
 import uuid
 import os
+from models.consultazione import Consultazione
 import shutil # Per trovare i percorsi degli eseguibili
 from contextlib import contextmanager
 from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication, 
@@ -48,12 +50,14 @@ class DBDataError(DBMError):
 
 class UtentiMixin:
     def search_consultazioni(self, data_inizio: Optional[date] = None, data_fine: Optional[date] = None,
-                             richiedente: Optional[str] = None, funzionario: Optional[str] = None) -> List[Dict]:
+                             richiedente: Optional[str] = None, funzionario_autorizzante: Optional[str] = None) -> List[Consultazione]:
         """Chiama la funzione SQL cerca_consultazioni (invariata rispetto a comune_id)."""
         try:
             query = "SELECT * FROM cerca_consultazioni(%s, %s, %s, %s)"
-            params = (data_inizio, data_fine, richiedente, funzionario)
-            if self.execute_query(query, params): return self.fetchall()
+            params = (data_inizio, data_fine, richiedente, funzionario_autorizzante)
+            if self.execute_query(query, params): 
+                results = self.fetchall()
+                return [Consultazione.from_dict(dict(row)) for row in results]
         except psycopg2.Error as db_err: logger.error(f"Errore DB in search_consultazioni: {db_err}")
         except Exception as e: logger.error(f"Errore Python in search_consultazioni: {e}")
         return []
