@@ -692,10 +692,10 @@ class PartitaDetailsDialog(QDialog):
         if self.partita.possessori:
             possessori_table.setRowCount(len(self.partita.possessori))
             for i, possessore in enumerate(self.partita.possessori):
-                possessori_table.setItem(i, 0, QTableWidgetItem(str(possessore.get('id', ''))))
-                possessori_table.setItem(i, 1, QTableWidgetItem(possessore.get('nome_completo', '')))
-                possessori_table.setItem(i, 2, QTableWidgetItem(possessore.get('titolo', '')))
-                possessori_table.setItem(i, 3, QTableWidgetItem(possessore.get('quota', '')))
+                possessori_table.setItem(i, 0, QTableWidgetItem(str(getattr(possessore, 'id', ''))))
+                possessori_table.setItem(i, 1, QTableWidgetItem(getattr(possessore, 'nome_completo', '') or ''))
+                possessori_table.setItem(i, 2, QTableWidgetItem(getattr(possessore, 'titolo', '') or ''))
+                possessori_table.setItem(i, 3, QTableWidgetItem(getattr(possessore, 'quota', '') or ''))
         possessori_layout.addWidget(possessori_table)
         self.tabs.addTab(possessori_tab, "Possessori")
 
@@ -726,36 +726,37 @@ class PartitaDetailsDialog(QDialog):
             variazioni_table.setRowCount(len(self.partita.variazioni))
             for i, var in enumerate(self.partita.variazioni):
                 col = 0
-                variazioni_table.setItem(i, col, QTableWidgetItem(str(var.get('id', '')))); col += 1
-                variazioni_table.setItem(i, col, QTableWidgetItem(var.get('tipo', ''))); col += 1
-                variazioni_table.setItem(i, col, QTableWidgetItem(str(var.get('data_variazione', '')))); col += 1
+                variazioni_table.setItem(i, col, QTableWidgetItem(str(getattr(var, 'id', '')))); col += 1
+                variazioni_table.setItem(i, col, QTableWidgetItem(getattr(var, 'tipo', '') or '')); col += 1
+                variazioni_table.setItem(i, col, QTableWidgetItem(str(getattr(var, 'data_variazione', '') or ''))); col += 1
 
                 # Informazioni Partita Origine
-                origine_text = ""
-                if var.get('partita_origine_id'): # Solo se l'ID esiste
-                    num_orig = var.get('origine_numero_partita', 'N/D')
-                    com_orig = var.get('origine_comune_nome', 'N/D')
+                if getattr(var, 'partita_origine_id', None):
+                    num_orig = getattr(var, 'partita_origine_numero', 'N/D') or 'N/D'
+                    com_orig = getattr(var, 'comune_origine', 'N/D') or 'N/D'
                     origine_text = f"N.{num_orig} ({com_orig})"
                 else:
-                    origine_text = "-" # O "N/A"
+                    origine_text = "-"
                 variazioni_table.setItem(i, col, QTableWidgetItem(origine_text)); col += 1
 
                 # Informazioni Partita Destinazione
-                dest_text = ""
-                if var.get('partita_destinazione_id'): # Solo se l'ID esiste
-                    num_dest = var.get('destinazione_numero_partita', 'N/D')
-                    com_dest = var.get('destinazione_comune_nome', 'N/D')
+                if getattr(var, 'partita_destinazione_id', None):
+                    num_dest = getattr(var, 'partita_destinazione_numero', 'N/D') or 'N/D'
+                    com_dest = getattr(var, 'comune_destinazione', 'N/D') or 'N/D'
                     dest_text = f"N.{num_dest} ({com_dest})"
                 else:
-                    dest_text = "-" # O "N/A"
+                    dest_text = "-"
                 variazioni_table.setItem(i, col, QTableWidgetItem(dest_text)); col += 1
 
-                # Contratto info (come prima)
-                contratto_text = ""
-                if var.get('tipo_contratto'):
-                    contratto_text = f"{var['tipo_contratto']} del {var.get('data_contratto', '')}"
-                    if var.get('notaio'):
-                        contratto_text += f" - {var['notaio']}"
+                # Contratto info
+                tipo_contratto = getattr(var, 'tipo_contratto', None)
+                if tipo_contratto:
+                    contratto_text = f"{tipo_contratto} del {getattr(var, 'data_contratto', '') or ''}"
+                    notaio = getattr(var, 'notaio', None)
+                    if notaio:
+                        contratto_text += f" - {notaio}"
+                else:
+                    contratto_text = ""
                 variazioni_table.setItem(i, col, QTableWidgetItem(contratto_text)); col += 1
 
         variazioni_layout.addWidget(variazioni_table)
@@ -972,14 +973,14 @@ class PartitaDetailsDialog(QDialog):
         possessori = getattr(partita, 'possessori', [])
         if possessori:
             for i, poss in enumerate(possessori):
-                report_lines.append(f"  - Possessore {i+1} (ID: {poss.get('id', 'N/D')}): {poss.get('nome_completo', 'N/D')}")
-                report_lines.append(f"    Titolo di Possesso: {poss.get('titolo', 'N/A')}")
-                report_lines.append(f"    Quota: {poss.get('quota', 'N/A')}")
+                report_lines.append(f"  - Possessore {i+1} (ID: {getattr(poss, 'id', 'N/D')}): {getattr(poss, 'nome_completo', 'N/D')}")
+                report_lines.append(f"    Titolo di Possesso: {getattr(poss, 'titolo', 'N/A')}")
+                report_lines.append(f"    Quota: {getattr(poss, 'quota', 'N/A')}")
                 if i < len(possessori) - 1:
-                    report_lines.append("  " + "-" * 60) # Separatore tra possessori
+                    report_lines.append("  " + "-" * 60)
         else:
             report_lines.append("  Nessun possessore associato a questa partita.")
-        report_lines.append("\n") # Linea vuota per separazione
+        report_lines.append("\n")
 
         # --- SEZIONE 3: IMMOBILI ---
         report_lines.append("=" * 70)
@@ -988,26 +989,27 @@ class PartitaDetailsDialog(QDialog):
         immobili = getattr(partita, 'immobili', [])
         if immobili:
             for i, imm in enumerate(immobili):
-                report_lines.append(f"  - Immobile {i+1} (ID: {imm.get('id', 'N/D')}): {imm.get('natura', 'N/D')}")
-                localita_info = f"{imm.get('localita_nome', '')}"
-                if imm.get('localita_tipo'):
-                    localita_info += f" ({imm.get('localita_tipo')})"
+                report_lines.append(f"  - Immobile {i+1} (ID: {getattr(imm, 'id', 'N/D')}): {getattr(imm, 'natura', 'N/D')}")
+                localita_nome = getattr(imm, 'localita_nome', '') or ''
+                localita_tipo = getattr(imm, 'localita_tipo', '') or getattr(imm, 'tipo_localita', '') or ''
+                localita_info = f"{localita_nome} ({localita_tipo})" if localita_nome and localita_tipo else localita_nome
                 report_lines.append(f"    Località: {localita_info.strip() if localita_info.strip() else 'N/A'}")
-                report_lines.append(f"    Classificazione: {imm.get('classificazione', 'N/A')}")
-                report_lines.append(f"    Consistenza: {imm.get('consistenza', 'N/A')}")
+                report_lines.append(f"    Classificazione: {getattr(imm, 'classificazione', 'N/A') or 'N/A'}")
+                report_lines.append(f"    Consistenza: {getattr(imm, 'consistenza', 'N/A') or 'N/A'}")
                 piani_vani_info = []
-                if imm.get('numero_piani') is not None and imm.get('numero_piani') > 0:
-                    piani_vani_info.append(f"Piani: {imm.get('numero_piani')}")
-                if imm.get('numero_vani') is not None and imm.get('numero_vani') > 0:
-                    piani_vani_info.append(f"Vani: {imm.get('numero_vani')}")
+                num_piani = getattr(imm, 'numero_piani', None)
+                num_vani = getattr(imm, 'numero_vani', None)
+                if num_piani is not None and num_piani:
+                    piani_vani_info.append(f"Piani: {num_piani}")
+                if num_vani is not None and num_vani:
+                    piani_vani_info.append(f"Vani: {num_vani}")
                 if piani_vani_info:
                     report_lines.append(f"    Dettagli: {' | '.join(piani_vani_info)}")
-                
                 if i < len(immobili) - 1:
-                    report_lines.append("  " + "-" * 60) # Separatore tra immobili
+                    report_lines.append("  " + "-" * 60)
         else:
             report_lines.append("  Nessun immobile associato a questa partita.")
-        report_lines.append("\n") # Linea vuota per separazione
+        report_lines.append("\n")
 
         # --- SEZIONE 4: VARIAZIONI ---
         report_lines.append("=" * 70)
@@ -1016,22 +1018,22 @@ class PartitaDetailsDialog(QDialog):
         variazioni = getattr(partita, 'variazioni', [])
         if variazioni:
             for i, var in enumerate(variazioni):
-                report_lines.append(f"  - Variazione {i+1} (ID: {var.get('id', 'N/D')}): {var.get('tipo', 'N/D')}")
-                report_lines.append(f"    Data Variazione: {var.get('data_variazione', 'N/D')}")
-                
+                report_lines.append(f"  - Variazione {i+1} (ID: {getattr(var, 'id', 'N/D')}): {getattr(var, 'tipo', 'N/D')}")
+                report_lines.append(f"    Data Variazione: {getattr(var, 'data_variazione', 'N/D')}")
+
                 # Dettagli Partita Origine
-                orig_part_id = var.get('partita_origine_id')
-                orig_num = var.get('origine_numero_partita', 'N/D')
-                orig_com = var.get('origine_comune_nome', 'N/D')
+                orig_part_id = getattr(var, 'partita_origine_id', None)
+                orig_num = getattr(var, 'partita_origine_numero', 'N/D') or 'N/D'
+                orig_com = getattr(var, 'comune_origine', 'N/D') or 'N/D'
                 if orig_part_id:
                     report_lines.append(f"    Partita Origine: N.{orig_num} (Comune: {orig_com}) [ID: {orig_part_id}]")
                 else:
                     report_lines.append("    Partita Origine: N/A")
 
                 # Dettagli Partita Destinazione
-                dest_part_id = var.get('partita_destinazione_id')
-                dest_num = var.get('destinazione_numero_partita', 'N/D')
-                dest_com = var.get('destinazione_comune_nome', 'N/D')
+                dest_part_id = getattr(var, 'partita_destinazione_id', None)
+                dest_num = getattr(var, 'partita_destinazione_numero', 'N/D') or 'N/D'
+                dest_com = getattr(var, 'comune_destinazione', 'N/D') or 'N/D'
                 if dest_part_id:
                     report_lines.append(f"    Partita Destinazione: N.{dest_num} (Comune: {dest_com}) [ID: {dest_part_id}]")
                 else:
@@ -1039,18 +1041,15 @@ class PartitaDetailsDialog(QDialog):
 
                 # Dettagli Contratto
                 contr_info_parts = []
-                if var.get('tipo_contratto'): contr_info_parts.append(f"Tipo: {var.get('tipo_contratto')}")
-                if var.get('data_contratto'): contr_info_parts.append(f"Data: {var.get('data_contratto')}")
-                if var.get('notaio'): contr_info_parts.append(f"Notaio: {var.get('notaio')}")
-                if var.get('repertorio'): contr_info_parts.append(f"Repertorio: {var.get('repertorio')}")
+                if getattr(var, 'tipo_contratto', None): contr_info_parts.append(f"Tipo: {var.tipo_contratto}")
+                if getattr(var, 'data_contratto', None): contr_info_parts.append(f"Data: {var.data_contratto}")
+                if getattr(var, 'notaio', None): contr_info_parts.append(f"Notaio: {var.notaio}")
+                if getattr(var, 'repertorio', None): contr_info_parts.append(f"Repertorio: {var.repertorio}")
                 if contr_info_parts:
                     report_lines.append(f"    Contratto: {' | '.join(contr_info_parts)}")
-                
-                if var.get('note_variazione') : report_lines.append(f"    Note Variazione: {var.get('note_variazione')}") # Se c'è una colonna note per la variazione
-                if var.get('contratto_note') : report_lines.append(f"    Note Contratto: {var.get('contratto_note')}") # Se c'è una colonna note nel contratto
 
                 if i < len(variazioni) - 1:
-                    report_lines.append("  " + "-" * 60) # Separatore tra variazioni
+                    report_lines.append("  " + "-" * 60)
         else:
             report_lines.append("  Nessuna variazione registrata per questa partita.")
         report_lines.append("\n") # Linea vuota per separazione
@@ -4509,13 +4508,12 @@ class PartitaSearchDialog(QDialog):
             row_pos = self.results_table.rowCount()
             self.results_table.insertRow(row_pos)
             col = 0
-            self.results_table.setItem(row_pos, col, QTableWidgetItem(str(partita.get('id', '')))); col += 1
-            self.results_table.setItem(row_pos, col, QTableWidgetItem(partita.get('comune_nome', ''))); col += 1
-            self.results_table.setItem(row_pos, col, QTableWidgetItem(str(partita.get('numero_partita', '')))); col += 1
-            # --- POPOLAMENTO COLONNA SUFFISSO ---
-            self.results_table.setItem(row_pos, col, QTableWidgetItem(partita.get('suffisso_partita', ''))); col += 1
-            self.results_table.setItem(row_pos, col, QTableWidgetItem(partita.get('tipo', ''))); col += 1
-            self.results_table.setItem(row_pos, col, QTableWidgetItem(partita.get('stato', ''))); col += 1
+            self.results_table.setItem(row_pos, col, QTableWidgetItem(str(getattr(partita, 'id', '')))); col += 1
+            self.results_table.setItem(row_pos, col, QTableWidgetItem(getattr(partita, 'comune_nome', '') or '')); col += 1
+            self.results_table.setItem(row_pos, col, QTableWidgetItem(str(getattr(partita, 'numero_partita', '')))); col += 1
+            self.results_table.setItem(row_pos, col, QTableWidgetItem(getattr(partita, 'suffisso_partita', '') or '')); col += 1
+            self.results_table.setItem(row_pos, col, QTableWidgetItem(getattr(partita, 'tipo', '') or '')); col += 1
+            self.results_table.setItem(row_pos, col, QTableWidgetItem(getattr(partita, 'stato', '') or '')); col += 1
         self.results_table.resizeColumnsToContents()
 
     def select_comune(self):

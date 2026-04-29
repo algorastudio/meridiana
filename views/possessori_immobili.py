@@ -519,43 +519,25 @@ class RicercaAvanzataImmobiliWidget(QWidget):
         self.risultati_immobili_table.setRowCount(0)
 
         if immobili_trovati:
-            self.risultati_immobili_table.setRowCount(
-                len(immobili_trovati))
+            self.risultati_immobili_table.setRowCount(len(immobili_trovati))
             for row_idx, immobile in enumerate(immobili_trovati):
                 col = 0
-                self.risultati_immobili_table.setItem(
-                    row_idx, col, QTableWidgetItem(str(immobile.get('id_immobile', ''))))
-                col += 1
-                self.risultati_immobili_table.setItem(
-                    row_idx, col, QTableWidgetItem(str(immobile.get('numero_partita', ''))))
-                col += 1
-                self.risultati_immobili_table.setItem(
-                    row_idx, col, QTableWidgetItem(immobile.get('comune_nome', '')))
-                col += 1
-                localita_display = f"{immobile.get('localita_nome', '')}"
-                if immobile.get('localita_tipo'):
-                    localita_display += f" ({immobile.get('localita_tipo')})"
-                self.risultati_immobili_table.setItem(
-                    row_idx, col, QTableWidgetItem(localita_display.strip()))
-                col += 1
-                self.risultati_immobili_table.setItem(
-                    row_idx, col, QTableWidgetItem(immobile.get('natura', '')))
-                col += 1
-                self.risultati_immobili_table.setItem(
-                    row_idx, col, QTableWidgetItem(immobile.get('classificazione', '')))
-                col += 1
-                self.risultati_immobili_table.setItem(
-                    row_idx, col, QTableWidgetItem(immobile.get('consistenza', '')))
-                col += 1
-                self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(str(
-                    immobile.get('numero_piani', '')) if immobile.get('numero_piani') is not None else ''))
-                col += 1
-                self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(str(
-                    immobile.get('numero_vani', '')) if immobile.get('numero_vani') is not None else ''))
-                col += 1
-                self.risultati_immobili_table.setItem(
-                    row_idx, col, QTableWidgetItem(immobile.get('possessori_attuali', '')))
-                col += 1  # Campo dalla funzione SQL
+                imm_id = getattr(immobile, 'id_immobile', None) or getattr(immobile, 'id', '')
+                self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(str(imm_id))); col += 1
+                self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(str(getattr(immobile, 'numero_partita', '') or ''))); col += 1
+                self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(getattr(immobile, 'comune_nome', '') or '')); col += 1
+                localita_nome = getattr(immobile, 'localita_nome', '') or ''
+                localita_tipo = getattr(immobile, 'localita_tipo', '') or getattr(immobile, 'tipo_localita', '') or ''
+                localita_display = f"{localita_nome} ({localita_tipo})" if localita_nome and localita_tipo else localita_nome
+                self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(localita_display.strip())); col += 1
+                self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(getattr(immobile, 'natura', '') or '')); col += 1
+                self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(getattr(immobile, 'classificazione', '') or '')); col += 1
+                self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(getattr(immobile, 'consistenza', '') or '')); col += 1
+                num_piani = getattr(immobile, 'numero_piani', None)
+                self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(str(num_piani) if num_piani is not None else '')); col += 1
+                num_vani = getattr(immobile, 'numero_vani', None)
+                self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(str(num_vani) if num_vani is not None else '')); col += 1
+                self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(getattr(immobile, 'possessori_attuali', '') or '')); col += 1
 
             QMessageBox.information(
                 self, "Ricerca Completata", f"Trovati {len(immobili_trovati)} immobili.")
@@ -763,7 +745,7 @@ class RegistrazioneProprietaWidget(LazyLoadedWidget):
             if self.immobili_cache:
                 self.imm_search_combo.addItem("--- Cerca Immobile Esistente ---", None)
                 for imm in self.immobili_cache:
-                    self.imm_search_combo.addItem(f"{imm['natura']} in {imm['localita_nome']}", imm['id'])
+                    self.imm_search_combo.addItem(f"{getattr(imm, 'natura', '')} in {getattr(imm, 'localita_nome', '')}", getattr(imm, 'id', None))
                 self.imm_search_combo.setEnabled(True)
             else:
                 self.imm_search_combo.addItem("Nessun immobile in questo comune", None)
@@ -789,9 +771,12 @@ class RegistrazioneProprietaWidget(LazyLoadedWidget):
             poss_info = dialog.nuovo_possessore_dati
             self._load_possessori_for_combo() # Ricarica la lista per includere il nuovo
             # Aggiungi direttamente alla lista della partita corrente
-            dettagli = DettagliLegamePossessoreDialog.get_details_for_new_legame(poss_info.get('nome_completo'), 'principale', self)
+            # poss_info è un Possessore dataclass → usa getattr
+            nome_completo = getattr(poss_info, 'nome_completo', None)
+            poss_id = getattr(poss_info, 'id', None)
+            dettagli = DettagliLegamePossessoreDialog.get_details_for_new_legame(nome_completo, 'principale', self)
             if dettagli:
-                self.possessori_data.append({"id": poss_info['id'], "nome_completo": poss_info['nome_completo'], **dettagli})
+                self.possessori_data.append({"id": poss_id, "nome_completo": nome_completo, **dettagli})
                 self.update_possessori_table()
     def _add_existing_immobile(self):
         immobile_id = self.imm_search_combo.currentData()
@@ -801,9 +786,19 @@ class RegistrazioneProprietaWidget(LazyLoadedWidget):
             return QMessageBox.information(self, "Già Presente", "Questo immobile è già nella lista.")
 
         # Trova i dettagli dell'immobile dalla cache
-        imm_details = next((i for i in self.immobili_cache if i['id'] == immobile_id), None)
+        imm_details = next((i for i in self.immobili_cache if getattr(i, 'id', None) == immobile_id), None)
         if imm_details:
-            self.immobili_data.append(imm_details)
+            # Converti il dataclass Immobile in dict per coerenza con il resto di immobili_data
+            self.immobili_data.append({
+                'id': getattr(imm_details, 'id', None),
+                'natura': getattr(imm_details, 'natura', ''),
+                'localita_id': getattr(imm_details, 'localita_id', None),
+                'localita_nome': getattr(imm_details, 'localita_nome', ''),
+                'classificazione': getattr(imm_details, 'classificazione', ''),
+                'consistenza': getattr(imm_details, 'consistenza', ''),
+                'numero_piani': getattr(imm_details, 'numero_piani', None),
+                'numero_vani': getattr(imm_details, 'numero_vani', None),
+            })
             self.update_immobili_table()
 
     def _add_inline_immobile(self):
@@ -838,22 +833,30 @@ class RegistrazioneProprietaWidget(LazyLoadedWidget):
         self._update_registra_button_state()
         
     def update_immobili_table(self):
+        import dataclasses
         self.immobili_table.setRowCount(len(self.immobili_data))
         for i, imm in enumerate(self.immobili_data):
-            immobile = imm if isinstance(imm, dict) else imm.to_dict()  # Assicurati che sia un dizionario
+            # immobili_data contiene sempre dict (sia da _add_inline che da _add_existing)
+            # per sicurezza convertiamo eventuali dataclass con asdict()
+            if isinstance(imm, dict):
+                immobile = imm
+            elif dataclasses.is_dataclass(imm):
+                immobile = dataclasses.asdict(imm)
+            else:
+                immobile = vars(imm)
             self.immobili_table.setItem(
-                i, 0, QTableWidgetItem(immobile.get('natura', '')))
+                i, 0, QTableWidgetItem(immobile.get('natura', '') or ''))
             self.immobili_table.setItem(i, 1, QTableWidgetItem(
-                immobile.get('localita_nome', '')))
+                immobile.get('localita_nome', '') or ''))
             self.immobili_table.setItem(i, 2, QTableWidgetItem(
-                immobile.get('classificazione', '')))
+                immobile.get('classificazione', '') or ''))
             self.immobili_table.setItem(
-                i, 3, QTableWidgetItem(immobile.get('consistenza', '')))
+                i, 3, QTableWidgetItem(immobile.get('consistenza', '') or ''))
 
             piani_vani = ""
-            if 'numero_piani' in immobile and immobile['numero_piani']:
+            if immobile.get('numero_piani'):
                 piani_vani += f"Piani: {immobile['numero_piani']}"
-            if 'numero_vani' in immobile and immobile['numero_vani']:
+            if immobile.get('numero_vani'):
                 if piani_vani:
                     piani_vani += ", "
                 piani_vani += f"Vani: {immobile['numero_vani']}"

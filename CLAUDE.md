@@ -7,9 +7,9 @@ Guida per Claude Code su questo progetto.
 **Meridiana** è un'applicazione desktop per la gestione degli archivi catastali storici italiani,
 sviluppata da Marco Santoro e concessa in comodato d'uso gratuito all'**Archivio di Stato di Savona**.
 
-- **Stack**: Python 3.12 + PyQt5 + PostgreSQL 14+
+- **Stack**: Python 3.13 + PyQt5 + PostgreSQL 14+
 - **Branch attivo**: `claude/archive-savona-version-L9NIe`
-- **Versione**: 1.2.1
+- **Versione**: 1.3.0
 
 ---
 
@@ -25,6 +25,9 @@ meridiana/
 ├── app_utils.py            # Utilità generali
 ├── config.py               # Configurazione DB e logging
 ├── custom_widgets.py       # Widget Qt minori
+├── models/                 # Dataclass di dominio (Partita, Possessore, Immobile, …)
+├── db_modules/             # Mixin per ogni entità (partite, possessori, immobili, …)
+├── views/                  # Widget per sezione (partite, possessori_immobili, strumenti, …)
 ├── sql_scripts/            # Tutti gli script SQL (schema + migration)
 │   └── setup_server.py     # Bootstrap DB: esegue gli script in ordine
 ├── tests/                  # Suite pytest
@@ -41,9 +44,12 @@ meridiana/
 
 ```
 GUI Widgets / Dialogs
-        │ chiamate dirette
+        │ getattr() su Dataclass
         ▼
-CatastoDBManager          ← unico layer DB, nessun ORM
+    models/           ← Partita, Possessore, Immobile, Variazione, …
+        ▲ costruzione
+        │
+db_modules/ Mixin     ← partite_mixin, possessori_mixin, immobili_mixin, …
         │ psycopg2 pool
         ▼
 PostgreSQL (schema: catasto)
@@ -51,6 +57,10 @@ PostgreSQL (schema: catasto)
         ▼
 Operazioni atomiche
 ```
+
+**Regola chiave**: i metodi `db_manager` che gestiscono entità principali restituiscono
+**Dataclass** (non `Dict`). La UI accede agli attributi via `getattr(obj, 'attr', default)`.
+I dizionari puri rimangono solo per: utenti, periodi storici, report consistenza, buffer UI locali.
 
 ### Gestione connessioni
 
@@ -77,7 +87,9 @@ DBMError             # errore generico DB
 | Operazione | Pattern | Return |
 |-----------|---------|--------|
 | CREATE    | `create_xxx(...)` | `int` (ID del nuovo record) |
-| READ      | `get_xxx(...)` / `search_xxx(...)` | `List[Dict]` o `Dict` |
+| READ entità principale | `get_xxx_details(id)` | `Optional[Dataclass]` |
+| READ lista entità | `search_xxx(...)` / `get_xxx_by_yyy(...)` | `List[Dataclass]` |
+| READ tipologiche/report | `get_xxx(...)` | `List[Dict]` o `Dict` |
 | UPDATE    | `update_xxx(id, dati: Dict)` | `bool` |
 | DELETE fisico | `delete_xxx(id)` | `bool` |
 | Archiviazione | `archivia_xxx(id)` | `None` (solleva eccezione se non trovato) |
@@ -195,6 +207,70 @@ pyinstaller meridiana.spec
 
 ---
 
+## Pattern Dataclass (v1.3.0+)
+
+### Regola fondamentale
+
+La UI **non chiama mai `.get('chiave')`** su oggetti restituiti da metodi `db_manager` che
+gestiscono entità principali. Usare sempre `getattr(obj, 'attr', default)`.
+
+```python
+# ✅ CORRETTO — oggetto è un Dataclass
+nome = getattr(possessore, 'nome_completo', '')
+immobile_id = getattr(immobile, 'id', None)
+
+# ❌ SBAGLIATO — AttributeError a runtime
+nome = possessore.get('nome_completo', '')  # Dataclass non ha .get()
+```
+
+### Quale metodo restituisce cosa?
+
+```python
+# → Dataclass (usare getattr)
+db.get_partita_details(id)          # → Optional[Partita]
+db.search_partite(...)              # → List[Partita]
+db.get_possessore_full_details(id)  # → Optional[Possessore]
+db.get_immobile_details(id)         # → Optional[Immobile]
+db.get_variazioni_by_partita(id)    # → List[Variazione]
+
+# → Dict (usare .get() normale)
+db.get_utenti()                     # → List[Dict]
+db.get_utente_by_id(id)             # → Optional[Dict]
+db.get_historical_periods()         # → List[Dict]
+db.get_periodo_storico_details(id)  # → Optional[Dict]
+db.get_report_consistenza_patrimoniale(id)  # → Dict[str, List[Dict]]
+```
+
+### Conversione Dataclass → Dict
+
+Quando un Dataclass deve essere inserito in strutture dict-based (es. buffer locali, JSON):
+
+```python
+import dataclasses
+
+# Da Dataclass a dict
+immobile_dict = dataclasses.asdict(immobile)  # ricorsivo
+
+# Da dict a Dataclass (pattern manuale nei mixin)
+immobile = Immobile(**row)  # dove row viene da cursor.fetchone()
+```
+
+### Buffer locali nelle widget (restano dict puri)
+
+`RegistrazioneProprietaWidget.possessori_data` e `immobili_data` sono **sempre liste di dict**.
+Quando si aggiunge un `Immobile` dataclass dalla cache, convertirlo subito:
+
+```python
+# In _add_existing_immobile:
+self.immobili_data.append({
+    'id': getattr(imm_details, 'id', None),
+    'natura': getattr(imm_details, 'natura', ''),
+    # ...
+})
+```
+
+---
+
 ## Bug fix noti (v1.2.1)
 
 ### Migrazione tipo_localita (Script 20)
@@ -227,3 +303,4 @@ Script 20 ha migrato `localita.tipo` (text) → `localita.tipo_id` (FK a `tipo_l
 - Non aggiungere `print()` nel codice di produzione — usare `self.logger`
 - Non lasciare credenziali hardcoded in nessun file (vedi storia: `.wolf69326vHRVvmRzsID.py`)
 - Prima di modificare query SQL che usano `localita`, controllare se usano `l.tipo` (rimosso) o `l.tipo_id` (corretto)
+- **Non usare `.get()` su Dataclass**: in caso di errore `AttributeError: 'Xxx' object has no attribute 'get'`, convertire con `getattr(obj, 'attr', default)`

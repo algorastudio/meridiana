@@ -1231,26 +1231,24 @@ class OperazioniPartitaWidget(QWidget):
             for row, immobile in enumerate(immobili_data):
                 col = 0
                 table.setItem(row, col, QTableWidgetItem(
-                    str(immobile.get('id', 'N/D'))))
+                    str(getattr(immobile, 'id', 'N/D'))))
                 col += 1
                 table.setItem(row, col, QTableWidgetItem(
-                    immobile.get('natura', 'N/D')))
+                    getattr(immobile, 'natura', 'N/D') or 'N/D'))
                 col += 1
 
                 # --- NUOVE COLONNE ---
                 table.setItem(row, col, QTableWidgetItem(
-                    immobile.get('classificazione', 'N/D')))
+                    getattr(immobile, 'classificazione', 'N/D') or 'N/D'))
                 col += 1
                 table.setItem(row, col, QTableWidgetItem(
-                    immobile.get('consistenza', 'N/D')))
+                    getattr(immobile, 'consistenza', 'N/D') or 'N/D'))
                 col += 1
                 # --- FINE NUOVE COLONNE ---
 
-                loc_nome = immobile.get('localita_nome', '')
-                loc_tipo = immobile.get('localita_tipo', '')
-                loc_text = loc_nome
-                if loc_tipo:
-                    loc_text += f" ({loc_tipo})"
+                loc_nome = getattr(immobile, 'localita_nome', '') or ''
+                loc_tipo = getattr(immobile, 'localita_tipo', '') or getattr(immobile, 'tipo_localita', '') or ''
+                loc_text = f"{loc_nome} ({loc_tipo})" if loc_nome and loc_tipo else loc_nome
                 table.setItem(row, col, QTableWidgetItem(loc_text.strip()))
                 col += 1
 
@@ -1335,16 +1333,16 @@ class OperazioniPartitaWidget(QWidget):
             table.setRowCount(len(immobili_data))
             for row, immobile in enumerate(immobili_data):
                 chk = QCheckBox()
-                chk.setProperty("immobile_id", immobile.get('id'))
+                chk.setProperty("immobile_id", getattr(immobile, 'id', None))
                 table.setCellWidget(row, 0, chk)
-                id_i = QTableWidgetItem(str(immobile.get('id', 'N/D')))
+                id_i = QTableWidgetItem(str(getattr(immobile, 'id', 'N/D')))
                 id_i.setFlags(id_i.flags() & ~Qt.ItemIsEditable)
                 table.setItem(row, 1, id_i)
-                nat_i = QTableWidgetItem(immobile.get('natura', 'N/D'))
+                nat_i = QTableWidgetItem(getattr(immobile, 'natura', 'N/D') or 'N/D')
                 nat_i.setFlags(nat_i.flags() & ~Qt.ItemIsEditable)
                 table.setItem(row, 2, nat_i)
-                loc_t = immobile.get('localita_nome', '')
-                loc_i = QTableWidgetItem(loc_t)
+                loc_nome = getattr(immobile, 'localita_nome', '') or ''
+                loc_i = QTableWidgetItem(loc_nome)
                 loc_i.setFlags(loc_i.flags() & ~Qt.ItemIsEditable)
                 table.setItem(row, 3, loc_i)
             # Configurazione resize mode per le colonne
