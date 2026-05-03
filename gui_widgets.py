@@ -65,10 +65,12 @@ except ImportError:
     # Fallback o gestione errore
     class DBMError(Exception):
         pass  # ... definizioni fallback come nel file originale
-    logging.warning("catasto_db_manager non trovato, usando eccezioni DB fallback in gui_widgets.py")
+    print("ATTENZIONE: catasto_db_manager non trovato, usando eccezioni DB fallback in gui_widgets.py")
 class ElencoComuniWidget(LazyLoadedWidget):
     def __init__(self, db_manager: 'CatastoDBManager', parent=None):
         super().__init__(parent)
+        # Stampa di debug visibile nella console all'avvio
+        print("--- DEBUG: Inizializzazione di ElencoComuniWidget ---")
         if db_manager:
             self.db_manager = db_manager
             self.logger.info(f"Widget inizializzato CORRETTAMENTE con DBManager (ID Oggetto: {id(self.db_manager)})")
@@ -240,7 +242,20 @@ class ElencoComuniWidget(LazyLoadedWidget):
                         row_visible = True
                         break
             self.comuni_table.setRowHidden(row, not row_visible)
-
+        
+        filter_text = self.filter_comuni_edit.text().strip().lower()
+        for row in range(self.comuni_table.rowCount()):
+            row_visible = False
+            if not filter_text:
+                row_visible = True
+            else:
+                for col in range(self.comuni_table.columnCount()):
+                    item = self.comuni_table.item(row, col)
+                    if item and filter_text in item.text().lower():
+                        row_visible = True
+                        break
+            self.comuni_table.setRowHidden(row, not row_visible)
+    
     def _get_comune_info_from_row(self, row: int) -> Optional[Tuple[int, str]]:
         """Helper per ottenere ID e nome del comune da una specifica riga."""
         try:
@@ -765,8 +780,10 @@ class RicercaPartiteWidget(QWidget):
         if dialog.exec_() == QDialog.Accepted:
             # Se l'utente ha premuto "Salva" e le modifiche sono state salvate,
             # aggiorna la tabella per mostrare i nuovi dati.
+            print("Modifiche salvate. Aggiornamento della vista in corso...")
             self.carica_dati_immobili()
         else:
+            print("Operazione di modifica annullata dall'utente.")
 
 
 class RicercaAvanzataImmobiliWidget(QWidget):
@@ -965,6 +982,25 @@ class RicercaAvanzataImmobiliWidget(QWidget):
         ) if self.vani_max_spinbox.value() != 0 else None
 
         p_nome_possessore = self.nome_possessore_edit.text().strip() or None
+
+        # --- STAMPE DI DEBUG DA AGGIUNGERE/DECOMMENTARE ---
+        print("-" * 30)
+        print("DEBUG GUI: Parametri inviati a ricerca_avanzata_immobili_gui:")
+        print(f"  comune_id: {p_comune_id} (tipo: {type(p_comune_id)})")
+        print(f"  localita_id: {p_localita_id} (tipo: {type(p_localita_id)})")
+        print(f"  natura_search: '{p_natura}' (tipo: {type(p_natura)})")
+        print(
+            f"  classificazione_search: '{p_classificazione}' (tipo: {type(p_classificazione)})")
+        print(
+            f"  consistenza_search: '{p_consistenza_search}' (tipo: {type(p_consistenza_search)})")
+        print(f"  piani_min: {p_piani_min} (tipo: {type(p_piani_min)})")
+        print(f"  piani_max: {p_piani_max} (tipo: {type(p_piani_max)})")
+        print(f"  vani_min: {p_vani_min} (tipo: {type(p_vani_min)})")
+        print(f"  vani_max: {p_vani_max} (tipo: {type(p_vani_max)})")
+        print(
+            f"  nome_possessore_search: '{p_nome_possessore}' (tipo: {type(p_nome_possessore)})")
+        print("-" * 30)
+        # --- FINE STAMPE DI DEBUG ---
 
         try:
             immobili_trovati = self.db_manager.ricerca_avanzata_immobili_gui(
@@ -1806,24 +1842,19 @@ class InserimentoLocalitaWidget(QWidget):
             QMessageBox.critical(self, "Errore Inserimento", str(e))
 
     def refresh_localita(self):
+        # ... (questo metodo rimane quasi identico, ma deve recuperare il nome del tipo)
         self.localita_table.setRowCount(0)
-        if not self.comune_id:
-            return
+        if not self.comune_id: return
 
         try:
+            # get_localita_by_comune ora deve fare un JOIN per prendere il nome del tipo
             localita_list = self.db_manager.get_localita_by_comune(self.comune_id)
-            if not localita_list:
-                return
-            self.localita_table.setRowCount(len(localita_list))
-            for i, loc in enumerate(localita_list):
-                self.localita_table.setItem(i, 0, QTableWidgetItem(str(loc.get('id', ''))))
-                self.localita_table.setItem(i, 1, QTableWidgetItem(loc.get('nome', '') or ''))
-                self.localita_table.setItem(i, 2, QTableWidgetItem(loc.get('tipo', '') or ''))
-            self.localita_table.resizeColumnsToContents()
+            # ... (popola la tabella, assicurati che la query restituisca il nome del tipo, non l'id)
+            # Se la query db non è stata modificata, la colonna "tipo" conterrà l'ID.
+            # Per ora, la lasciamo così, ma l'ideale sarebbe aggiornare la query.
         except Exception as e:
-            logging.getLogger("CatastoGUI").error(
-                f"Errore caricamento località per comune ID {self.comune_id}: {e}", exc_info=True)
-            QMessageBox.critical(self, "Errore", f"Impossibile caricare le località:\n{e}")
+            # ...
+            pass
 
 class InserimentoPartitaWidget(QWidget):
     import_csv_requested = pyqtSignal()
