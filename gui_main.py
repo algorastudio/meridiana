@@ -73,7 +73,7 @@ try:
     from gui_widgets import UnifiedFuzzySearchWidget,UnifiedFuzzySearchThread
     FUZZY_SEARCH_AVAILABLE = True
 except ImportError as e:
-    print(f'[INIT] Ricerca fuzzy non disponibile')
+    logging.warning("Ricerca fuzzy non disponibile")
     FUZZY_SEARCH_AVAILABLE = False
 
 from gui_actions import MainWindowActionsMixin

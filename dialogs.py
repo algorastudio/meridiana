@@ -3980,6 +3980,9 @@ class ModificaImmobileDialog(QDialog):
         if not all([dati_aggiornati['natura'], dati_aggiornati['foglio'], dati_aggiornati['mappale']]):
             QMessageBox.warning(self, "Dati Mancanti", "I campi 'Natura', 'Foglio' e 'Mappale' sono obbligatori.")
             return
+        if dati_aggiornati['id_localita'] is None:
+            QMessageBox.warning(self, "Dati Mancanti", "Selezionare una località valida.")
+            return
 
         # 3. Chiamata al DB Manager per l'aggiornamento
         try:
