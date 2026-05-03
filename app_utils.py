@@ -281,12 +281,6 @@ def check_network_environment(allowed_subnet="192.168.1."):
         msg.setWindowTitle("Errore di Sicurezza")
         msg.exec_()
         return False
-def _get_default_export_path(default_filename: str) -> str:
-    export_dir_name = "esportazioni"
-    full_dir_path = os.path.abspath(export_dir_name)
-    os.makedirs(full_dir_path, exist_ok=True)
-    return os.path.join(full_dir_path, default_filename)
-
 def gui_esporta_partita_json(parent_widget, db_manager: CatastoDBManager, partita_id: int):
     # Recupera i dati usando il metodo del db_manager che restituisce il dizionario completo
     # Questo metodo è get_partita_data_for_export, NON export_partita_json
