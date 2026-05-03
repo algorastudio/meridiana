@@ -99,14 +99,20 @@ class CatastoDBManager:
 
     @property
     def _loc_tipo_migrated(self) -> bool:
-        """True se localita.tipo_id esiste (migrazione 20 applicata). Risultato cachato."""
-        if self._loc_tipo_migrated_cache is None:
-            self._loc_tipo_migrated_cache = self._detect_localita_schema()
-            if not self._loc_tipo_migrated_cache:
-                self.logger.warning(
-                    "Schema legacy rilevato: localita.tipo_id non esiste. "
-                    "Eseguire sql_scripts/20_tipo_localita.sql per migrare il DB.")
-        return self._loc_tipo_migrated_cache
+        """True se localita.tipo_id esiste (migrazione 20 applicata). Risultato cachato.
+        Se il pool non era pronto al primo check (False per timeout), riprova finché
+        il pool è disponibile per evitare di bloccarsi sul risultato sbagliato."""
+        if self._loc_tipo_migrated_cache is None or (
+                not self._loc_tipo_migrated_cache and self.pool is not None):
+            result = self._detect_localita_schema()
+            if result or self.pool is not None:
+                # Cachi solo quando il pool è pronto (risultato affidabile)
+                self._loc_tipo_migrated_cache = result
+                if not result:
+                    self.logger.warning(
+                        "Schema legacy: localita.tipo_id non esiste. "
+                        "Eseguire sql_scripts/20_tipo_localita.sql per migrare il DB.")
+        return bool(self._loc_tipo_migrated_cache)
 
     def _detect_localita_schema(self) -> bool:
         """Controlla via information_schema se localita.tipo_id esiste."""

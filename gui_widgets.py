@@ -2517,7 +2517,12 @@ class RegistrazioneProprietaWidget(LazyLoadedWidget):
         pass
 
     def _launch_wizard(self):
-        wiz = RegistrazioneProprietaWizard(self.db_manager, self)
+        try:
+            wiz = RegistrazioneProprietaWizard(self.db_manager, self)
+        except Exception as e:
+            self.logger.critical(f"Impossibile aprire il wizard di registrazione: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore", f"Impossibile aprire il wizard:\n{type(e).__name__}: {e}")
+            return
         if wiz.exec_() == QWizard.Accepted and wiz.nuova_partita_id:
             pid = wiz.nuova_partita_id
             cid = wiz.comune_id
