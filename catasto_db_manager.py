@@ -463,6 +463,20 @@ class CatastoDBManager:
         except Exception as e:
             self.logger.error(f"Errore generico in create_comune: {e}", exc_info=True)
             raise DBMError(f"Errore database durante l'aggiunta del comune: {e}") from e
+
+    def get_next_numero_partita(self, comune_id: int) -> Optional[int]:
+        """Restituisce MAX(numero_partita)+1 per il comune dato, o 1 se nessuna partita esiste."""
+        query = f"SELECT COALESCE(MAX(numero_partita), 0) + 1 FROM {self.schema}.partita WHERE comune_id = %s;"
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query, (comune_id,))
+                    row = cur.fetchone()
+                    return row[0] if row else 1
+        except Exception as e:
+            self.logger.error(f"Errore get_next_numero_partita: {e}")
+            return None
+
     def get_partite_by_comune_paginate(self, comune_id: int, limit: int = 100, offset: int = 0, filter_text: Optional[str] = None) -> Tuple[List[Dict[str, Any]], int]:
         """
         Recupera le partite in modo paginato, restituendo anche il conteggio totale.
