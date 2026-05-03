@@ -212,8 +212,8 @@ class TestAuditLogViewerExports:
     def widget(self, qapp, mock_db_manager):
         return AuditLogViewerWidget(db_manager=mock_db_manager)
 
-    @patch('gui_widgets.QFileDialog.getSaveFileName')
-    @patch('gui_widgets.QMessageBox.information')
+    @patch('views.amministrazione.QFileDialog.getSaveFileName')
+    @patch('views.amministrazione.QMessageBox.information')
     def test_export_csv_success(self, mock_msg_info, mock_file_dialog, widget, mock_db_manager, tmp_path):
         """Verifica che l'esportazione CSV generi il file corretto se ci sono dati."""
         export_file = tmp_path / "export_audit.csv"
@@ -233,20 +233,20 @@ class TestAuditLogViewerExports:
             assert "username;tabella;operazione" in content
             assert "admin;partita;I" in content
 
-    @patch('gui_widgets.QMessageBox.warning')
+    @patch('views.amministrazione.QMessageBox.warning')
     def test_export_csv_no_data(self, mock_msg_warn, widget, mock_db_manager):
         """Verifica che venga mostrato un avviso se non ci sono dati da esportare in CSV."""
         mock_db_manager.get_audit_logs.return_value = ([], 0)
         
-        with patch('gui_widgets.QFileDialog.getSaveFileName') as mock_file_dialog:
+        with patch('views.amministrazione.QFileDialog.getSaveFileName') as mock_save_dialog:
             widget._handle_export_csv()
             # Il file dialog non deve nemmeno aprirsi
-            mock_file_dialog.assert_not_called()
+            mock_save_dialog.assert_not_called()
             
         mock_msg_warn.assert_called_once()
 
-    @patch('gui_widgets.QFileDialog.getSaveFileName')
-    @patch('gui_widgets.QMessageBox.information')
+    @patch('views.amministrazione.QFileDialog.getSaveFileName')
+    @patch('views.amministrazione.QMessageBox.information')
     def test_export_xls_success(self, mock_msg_info, mock_file_dialog, widget, mock_db_manager, tmp_path):
         """Verifica che l'esportazione Excel generi il file se la libreria pandas è disponibile."""
         export_file = tmp_path / "export_audit.xlsx"
@@ -257,7 +257,7 @@ class TestAuditLogViewerExports:
         assert export_file.exists()
         mock_msg_info.assert_called_once()
 
-    @patch('gui_widgets.QMessageBox.warning')
+    @patch('views.amministrazione.QMessageBox.warning')
     def test_export_xls_no_data(self, mock_msg_warn, widget, mock_db_manager):
         """Verifica che venga mostrato un avviso se non ci sono dati da esportare in Excel."""
         mock_db_manager.get_audit_logs.return_value = ([], 0)
