@@ -1,5 +1,65 @@
 # Changelog — Meridiana
 
+## [1.3.0] — 2026-04-29
+
+Versione che completa la **migrazione del data access layer** da dizionari Python a Dataclass tipizzati.
+
+### Migrazione Data Layer — Dataclass (Area 10)
+
+L'intero livello di accesso ai dati è stato modernizzato: tutti i metodi critici del `db_manager`
+restituiscono ora **Dataclass tipizzati** invece di `Dict[str, Any]`. Le UI consumano i modelli
+con `getattr()` anziché `.get()`.
+
+**Nuovi modelli** (`models/`):
+- `Partita` — include liste annidate `possessori: List[Possessore]` e `immobili: List[Immobile]`
+- `Possessore` — con campo calcolato `nome_completo`
+- `Immobile` — con campi `localita_nome`, `localita_tipo` denormalizzati per la UI
+- `Variazione` — modello per lo storico delle variazioni di una partita
+- `Localita`, `Comune`, `User` — modelli di supporto
+
+**Mixin layer aggiornati** (`db_modules/`):
+- `partite_mixin.py`: `get_partita_details()` → `Optional[Partita]`; `search_partite()` → `List[Partita]`
+- `possessori_mixin.py`: `get_possessore_full_details()` → `Optional[Possessore]`
+- `immobili_mixin.py`: `get_immobile_details()` → `Optional[Immobile]`
+- `variazioni_mixin.py`: `get_variazioni_by_partita()` → `List[Variazione]`
+
+**Sincronizzazione DB** (bug fix critici):
+- Corretto passaggio di `partita_id` invece di `comune_id` nei binding UI → DB
+- Corretto errore di `**kwargs` unpacking in `update_immobile`
+
+**UI refactoring** — pattern `getattr()` applicato a:
+
+| File | Componente | Oggetto migrato |
+|---|---|---|
+| `dialogs.py` | `PartitaDetailsDialog` — tab Possessori | `Possessore` dataclass |
+| `dialogs.py` | `PartitaDetailsDialog` — tab Variazioni | `Variazione` dataclass |
+| `dialogs.py` | `PartitaDetailsDialog._genera_report_testuale` | `Variazione`, `Immobile`, `Possessore` |
+| `dialogs.py` | `PartitaSearchDialog` | `Partita` dataclass |
+| `views/partite.py` | Tabella trasferimento immobili | `Immobile` dataclass |
+| `views/partite.py` | Tabella passaggio proprietà | `Immobile` dataclass |
+| `views/possessori_immobili.py` | `RicercaAvanzataImmobiliWidget` | `Immobile` dataclass |
+| `views/possessori_immobili.py` | `RegistrazioneProprietaWidget._add_existing_immobile` | `Immobile` → conversione a dict |
+| `views/possessori_immobili.py` | `RegistrazioneProprietaWidget.update_immobili_table` | `dataclasses.asdict()` fallback |
+| `views/possessori_immobili.py` | `RegistrazioneProprietaWidget._crea_nuovo_possessore` | `Possessore` dataclass |
+
+**Bug fix specifici**:
+- `possessori_immobili.py`: `poss_info.get('nome_completo')` su `Possessore` dataclass → `getattr()`
+- `possessori_immobili.py`: `imm.to_dict()` inesistente → `dataclasses.asdict(imm)` con fallback
+- `possessori_immobili.py`: `poss_info['id']` su dataclass → `getattr(poss_info, 'id', None)`
+
+**Dati che rimangono dizionari** (corretti, nessuna modifica necessaria):
+- `get_utenti()` / `get_utente_by_id()` → `List[Dict]` / `Optional[Dict]`
+- `get_historical_periods()` / `get_periodo_storico_details()` → `Dict`
+- `get_report_consistenza_patrimoniale()` → `Dict[str, List[Dict]]`
+- Buffer locali `possessori_data`, `immobili_data` in `RegistrazioneProprietaWidget` → dict puri
+
+### Test (v1.3.0)
+
+- **62 test passati**, 102 skippati (richiedono PostgreSQL live)
+- Nessuna regressione introdotta dalla migrazione
+
+---
+
 ## [1.2.1] — 2026-04-20
 
 Versione preparata per la consegna in comodato d'uso all'**Archivio di Stato di Savona**.

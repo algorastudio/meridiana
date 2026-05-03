@@ -30,8 +30,7 @@ from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication,
                              QPushButton, QScrollArea, QSizePolicy, QSpacerItem,
                              QSpinBox, QStyle, QStyleFactory, QTabWidget,
                              QTableWidget, QTableWidgetItem, QTextEdit,
-                             QVBoxLayout, QWidget, QProgressDialog, QTextBrowser, QSlider,
-                             QCompleter, QSplitter, QWizard, QWizardPage)
+                             QVBoxLayout, QWidget,QProgressDialog,QTextBrowser,QSlider, QCompleter,QSplitter)
 
 from config import (
     SETTINGS_DB_TYPE, SETTINGS_DB_HOST, SETTINGS_DB_PORT, 
@@ -66,10 +65,12 @@ except ImportError:
     # Fallback o gestione errore
     class DBMError(Exception):
         pass  # ... definizioni fallback come nel file originale
-    logging.warning("catasto_db_manager non trovato, usando eccezioni DB fallback in gui_widgets.py")
+    print("ATTENZIONE: catasto_db_manager non trovato, usando eccezioni DB fallback in gui_widgets.py")
 class ElencoComuniWidget(LazyLoadedWidget):
     def __init__(self, db_manager: 'CatastoDBManager', parent=None):
         super().__init__(parent)
+        # Stampa di debug visibile nella console all'avvio
+        print("--- DEBUG: Inizializzazione di ElencoComuniWidget ---")
         if db_manager:
             self.db_manager = db_manager
             self.logger.info(f"Widget inizializzato CORRETTAMENTE con DBManager (ID Oggetto: {id(self.db_manager)})")
@@ -241,7 +242,20 @@ class ElencoComuniWidget(LazyLoadedWidget):
                         row_visible = True
                         break
             self.comuni_table.setRowHidden(row, not row_visible)
-
+        
+        filter_text = self.filter_comuni_edit.text().strip().lower()
+        for row in range(self.comuni_table.rowCount()):
+            row_visible = False
+            if not filter_text:
+                row_visible = True
+            else:
+                for col in range(self.comuni_table.columnCount()):
+                    item = self.comuni_table.item(row, col)
+                    if item and filter_text in item.text().lower():
+                        row_visible = True
+                        break
+            self.comuni_table.setRowHidden(row, not row_visible)
+    
     def _get_comune_info_from_row(self, row: int) -> Optional[Tuple[int, str]]:
         """Helper per ottenere ID e nome del comune da una specifica riga."""
         try:
@@ -766,7 +780,10 @@ class RicercaPartiteWidget(QWidget):
         if dialog.exec_() == QDialog.Accepted:
             # Se l'utente ha premuto "Salva" e le modifiche sono state salvate,
             # aggiorna la tabella per mostrare i nuovi dati.
+            print("Modifiche salvate. Aggiornamento della vista in corso...")
             self.carica_dati_immobili()
+        else:
+            print("Operazione di modifica annullata dall'utente.")
 
 
 class RicercaAvanzataImmobiliWidget(QWidget):
@@ -965,6 +982,25 @@ class RicercaAvanzataImmobiliWidget(QWidget):
         ) if self.vani_max_spinbox.value() != 0 else None
 
         p_nome_possessore = self.nome_possessore_edit.text().strip() or None
+
+        # --- STAMPE DI DEBUG DA AGGIUNGERE/DECOMMENTARE ---
+        print("-" * 30)
+        print("DEBUG GUI: Parametri inviati a ricerca_avanzata_immobili_gui:")
+        print(f"  comune_id: {p_comune_id} (tipo: {type(p_comune_id)})")
+        print(f"  localita_id: {p_localita_id} (tipo: {type(p_localita_id)})")
+        print(f"  natura_search: '{p_natura}' (tipo: {type(p_natura)})")
+        print(
+            f"  classificazione_search: '{p_classificazione}' (tipo: {type(p_classificazione)})")
+        print(
+            f"  consistenza_search: '{p_consistenza_search}' (tipo: {type(p_consistenza_search)})")
+        print(f"  piani_min: {p_piani_min} (tipo: {type(p_piani_min)})")
+        print(f"  piani_max: {p_piani_max} (tipo: {type(p_piani_max)})")
+        print(f"  vani_min: {p_vani_min} (tipo: {type(p_vani_min)})")
+        print(f"  vani_max: {p_vani_max} (tipo: {type(p_vani_max)})")
+        print(
+            f"  nome_possessore_search: '{p_nome_possessore}' (tipo: {type(p_nome_possessore)})")
+        print("-" * 30)
+        # --- FINE STAMPE DI DEBUG ---
 
         try:
             immobili_trovati = self.db_manager.ricerca_avanzata_immobili_gui(
@@ -2013,532 +2049,424 @@ class InserimentoPartitaWidget(QWidget):
             QMessageBox.critical(self, "Errore Salvataggio", f"Impossibile salvare la partita:\n{e}")
 
 
-# ─── Wizard: Registrazione Nuova Proprietà ────────────────────────────────────
-
-class _DatiPartitaPage(QWizardPage):
-    def __init__(self, wizard_ref: 'RegistrazioneProprietaWizard'):
-        super().__init__()
-        self._wiz = wizard_ref
-        self.setTitle("Passo 1 — Comune e Dati Partita")
-        self.setSubTitle("Seleziona il comune e inserisci i dati identificativi della nuova partita.")
-        self._build_ui()
-
-    def _build_ui(self):
-        layout = QFormLayout(self)
-        layout.setRowWrapPolicy(QFormLayout.WrapAllRows)
-
-        comune_row = QHBoxLayout()
-        self._comune_label = QLabel("Nessun comune selezionato.")
-        self._comune_label.setStyleSheet("font-weight: bold;")
-        btn_comune = QPushButton("Seleziona…")
-        btn_comune.clicked.connect(self._select_comune)
-        comune_row.addWidget(self._comune_label, 1)
-        comune_row.addWidget(btn_comune)
-        layout.addRow("Comune (*):", comune_row)
-
-        self._num_partita = QSpinBox()
-        self._num_partita.setRange(1, 9999999)
-        self._suffisso = QLineEdit()
-        self._suffisso.setPlaceholderText("Es. A (opzionale)")
-        self._suffisso.setMaximumWidth(100)
-        np_row = QHBoxLayout()
-        np_row.addWidget(self._num_partita)
-        np_row.addWidget(QLabel("Suffisso:"))
-        np_row.addWidget(self._suffisso)
-        np_row.addStretch()
-        layout.addRow("Numero Partita (*):", np_row)
-
-        self._data_edit = QDateEdit(calendarPopup=True)
-        self._data_edit.setDate(QDate.currentDate())
-        self._data_edit.setDisplayFormat("yyyy-MM-dd")
-        layout.addRow("Data Impianto (*):", self._data_edit)
-
-    def _select_comune(self):
-        if self._wiz.possessori_data or self._wiz.immobili_data:
-            reply = QMessageBox.question(
-                self, "Cambio Comune",
-                "Cambiare comune cancellerà i possessori e gli immobili già aggiunti.\nContinuare?",
-                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-            if reply != QMessageBox.Yes:
-                return
-            self._wiz.possessori_data.clear()
-            self._wiz.immobili_data.clear()
-
-        dialog = ComuneSelectionDialog(self._wiz.db_manager, self)
-        if dialog.exec_() == QDialog.Accepted and dialog.selected_comune_id:
-            self._wiz.comune_id = dialog.selected_comune_id
-            self._wiz.comune_nome = dialog.selected_comune_name
-            self._comune_label.setText(
-                f"{dialog.selected_comune_name}  (ID: {dialog.selected_comune_id})")
-            self._suggest_next_numero()
-            self._wiz._load_localita()
-            self._wiz._load_immobili()
-            self._wiz._load_possessori()
-            self.completeChanged.emit()
-
-    def _suggest_next_numero(self):
-        try:
-            n = self._wiz.db_manager.get_next_numero_partita(self._wiz.comune_id)
-            if n:
-                self._num_partita.setValue(n)
-        except Exception:
-            pass
-
-    def validatePage(self):
-        self._wiz.numero_partita = self._num_partita.value()
-        self._wiz.suffisso_partita = self._suffisso.text().strip() or None
-        self._wiz.data_impianto = self._data_edit.date().toPyDate()
-        return True
-
-    def isComplete(self):
-        return bool(self._wiz.comune_id)
-
-
-class _PossessoriPage(QWizardPage):
-    def __init__(self, wizard_ref: 'RegistrazioneProprietaWizard'):
-        super().__init__()
-        self._wiz = wizard_ref
-        self.setTitle("Passo 2 — Possessori")
-        self.setSubTitle("Aggiungi almeno un possessore alla nuova partita.")
-        self._build_ui()
-
-    def initializePage(self):
-        self._refresh_combo()
-
-    def _build_ui(self):
-        layout = QVBoxLayout(self)
-
-        self._table = QTableWidget(0, 4)
-        self._table.setHorizontalHeaderLabels(["ID", "Nome Completo", "Titolo", "Quota"])
-        self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        self._table.setSelectionBehavior(QTableWidget.SelectRows)
-        self._table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self._table.setMinimumHeight(140)
-        layout.addWidget(self._table)
-
-        add_group = QGroupBox("Aggiungi possessore")
-        add_layout = QHBoxLayout(add_group)
-        self._combo = QComboBox()
-        self._combo.setEditable(True)
-        self._combo.setPlaceholderText("Cerca possessore…")
-        self._combo.completer().setCompletionMode(QCompleter.PopupCompletion)
-        self._combo.completer().setFilterMode(Qt.MatchContains)
-        btn_add = QPushButton("Aggiungi")
-        btn_add.clicked.connect(self._add_selected)
-        btn_new = QPushButton("Crea Nuovo…")
-        btn_new.clicked.connect(self._create_new)
-        add_layout.addWidget(self._combo, 1)
-        add_layout.addWidget(btn_add)
-        add_layout.addWidget(btn_new)
-        layout.addWidget(add_group)
-
-        btn_rem = QPushButton("Rimuovi Selezionato")
-        btn_rem.clicked.connect(self._remove_selected)
-        layout.addWidget(btn_rem, alignment=Qt.AlignRight)
-
-    def _refresh_combo(self):
-        self._combo.clear()
-        self._combo.addItem("— Seleziona —", None)
-        for p in self._wiz.possessori_cache:
-            self._combo.addItem(
-                f"{p['nome_completo']}  ({p['comune_riferimento_nome']})", p['id'])
-
-    def _add_selected(self):
-        pid = self._combo.currentData()
-        if not pid:
-            return QMessageBox.warning(self, "Selezione Mancante",
-                                       "Seleziona un possessore dall'elenco.")
-        if any(p['id'] == pid for p in self._wiz.possessori_data):
-            return QMessageBox.information(self, "Già Presente",
-                                           "Questo possessore è già nella lista.")
-        dettagli = DettagliLegamePossessoreDialog.get_details_for_new_legame(
-            self._combo.currentText(), 'principale', self)
-        if dettagli:
-            self._wiz.possessori_data.append(
-                {"id": pid, "nome_completo": self._combo.currentText(), **dettagli})
-            self._refresh_table()
-
-    def _create_new(self):
-        dialog = CreatePossessoreDialog(self._wiz.db_manager, self)
-        if dialog.exec_() == QDialog.Accepted and dialog.nuovo_possessore_dati:
-            info = dialog.nuovo_possessore_dati
-            self._wiz._load_possessori()
-            self._refresh_combo()
-            dettagli = DettagliLegamePossessoreDialog.get_details_for_new_legame(
-                info['nome_completo'], 'principale', self)
-            if dettagli:
-                self._wiz.possessori_data.append(
-                    {"id": info['id'], "nome_completo": info['nome_completo'], **dettagli})
-                self._refresh_table()
-
-    def _remove_selected(self):
-        rows = self._table.selectedIndexes()
-        if not rows:
-            return
-        row = rows[0].row()
-        if 0 <= row < len(self._wiz.possessori_data):
-            del self._wiz.possessori_data[row]
-            self._refresh_table()
-
-    def _refresh_table(self):
-        data = self._wiz.possessori_data
-        self._table.setRowCount(len(data))
-        for i, d in enumerate(data):
-            self._table.setItem(i, 0, QTableWidgetItem(str(d.get('id', ''))))
-            self._table.setItem(i, 1, QTableWidgetItem(d.get('nome_completo', '')))
-            self._table.setItem(i, 2, QTableWidgetItem(d.get('titolo', '')))
-            self._table.setItem(i, 3, QTableWidgetItem(d.get('quota', '')))
-        self.completeChanged.emit()
-
-    def isComplete(self):
-        return len(self._wiz.possessori_data) >= 1
-
-
-class _ImmobiliPage(QWizardPage):
-    def __init__(self, wizard_ref: 'RegistrazioneProprietaWizard'):
-        super().__init__()
-        self._wiz = wizard_ref
-        self.setTitle("Passo 3 — Immobili")
-        self.setSubTitle("Aggiungi almeno un immobile alla nuova partita.")
-        self._build_ui()
-
-    def initializePage(self):
-        self._refresh_combos()
-
-    def _build_ui(self):
-        layout = QVBoxLayout(self)
-
-        self._table = QTableWidget(0, 5)
-        self._table.setHorizontalHeaderLabels(
-            ["Natura", "Località", "Classificazione", "Consistenza", "Piani/Vani"])
-        self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        self._table.setSelectionBehavior(QTableWidget.SelectRows)
-        self._table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self._table.setMinimumHeight(140)
-        layout.addWidget(self._table)
-
-        tabs = QTabWidget()
-        tabs.addTab(self._build_esistente_tab(), "Aggiungi Esistente")
-        tabs.addTab(self._build_nuovo_tab(), "Crea Nuovo")
-        layout.addWidget(tabs)
-
-        btn_rem = QPushButton("Rimuovi Selezionato")
-        btn_rem.clicked.connect(self._remove_selected)
-        layout.addWidget(btn_rem, alignment=Qt.AlignRight)
-
-    def _build_esistente_tab(self):
-        w = QWidget()
-        lay = QHBoxLayout(w)
-        self._imm_combo = QComboBox()
-        self._imm_combo.setEditable(True)
-        self._imm_combo.setPlaceholderText("Cerca immobile esistente…")
-        self._imm_combo.completer().setCompletionMode(QCompleter.PopupCompletion)
-        self._imm_combo.completer().setFilterMode(Qt.MatchContains)
-        btn = QPushButton("Aggiungi")
-        btn.clicked.connect(self._add_existing)
-        lay.addWidget(QLabel("Cerca:"))
-        lay.addWidget(self._imm_combo, 1)
-        lay.addWidget(btn)
-        return w
-
-    def _build_nuovo_tab(self):
-        w = QWidget()
-        lay = QGridLayout(w)
-        self._natura_edit = QLineEdit()
-        self._loc_combo = QComboBox()
-        self._class_edit = QLineEdit()
-        self._consist_edit = QLineEdit()
-        self._piani_spin = QSpinBox()
-        self._piani_spin.setRange(0, 99)
-        self._vani_spin = QSpinBox()
-        self._vani_spin.setRange(0, 99)
-        lay.addWidget(QLabel("Natura (*):"), 0, 0)
-        lay.addWidget(self._natura_edit, 0, 1)
-        lay.addWidget(QLabel("Località (*):"), 0, 2)
-        lay.addWidget(self._loc_combo, 0, 3)
-        lay.addWidget(QLabel("Classificazione:"), 1, 0)
-        lay.addWidget(self._class_edit, 1, 1)
-        lay.addWidget(QLabel("Consistenza:"), 1, 2)
-        lay.addWidget(self._consist_edit, 1, 3)
-        lay.addWidget(QLabel("Piani:"), 2, 0)
-        lay.addWidget(self._piani_spin, 2, 1)
-        lay.addWidget(QLabel("Vani:"), 2, 2)
-        lay.addWidget(self._vani_spin, 2, 3)
-        btn = QPushButton("Aggiungi alla Lista")
-        btn.clicked.connect(self._add_inline)
-        lay.addWidget(btn, 3, 3, alignment=Qt.AlignRight)
-        return w
-
-    def _refresh_combos(self):
-        self._imm_combo.clear()
-        self._imm_combo.addItem("— Cerca Immobile Esistente —", None)
-        for imm in self._wiz.immobili_cache:
-            self._imm_combo.addItem(
-                f"{imm['natura']} in {imm['localita_nome']}", imm['id'])
-        self._imm_combo.setEnabled(bool(self._wiz.immobili_cache))
-
-        self._loc_combo.clear()
-        self._loc_combo.addItem("— Seleziona Località —", None)
-        for loc in self._wiz.localita_cache:
-            self._loc_combo.addItem(
-                f"{loc['nome']}  ({loc.get('tipo', 'N/D')})", loc['id'])
-        self._loc_combo.setEnabled(bool(self._wiz.localita_cache))
-
-    def _add_existing(self):
-        imm_id = self._imm_combo.currentData()
-        if not imm_id:
-            return QMessageBox.warning(self, "Selezione Mancante",
-                                       "Seleziona un immobile dall'elenco.")
-        if any(i.get('id') == imm_id for i in self._wiz.immobili_data):
-            return QMessageBox.information(self, "Già Presente",
-                                           "Questo immobile è già nella lista.")
-        details = next((i for i in self._wiz.immobili_cache if i['id'] == imm_id), None)
-        if details:
-            self._wiz.immobili_data.append(details)
-            self._refresh_table()
-
-    def _add_inline(self):
-        natura = self._natura_edit.text().strip()
-        loc_id = self._loc_combo.currentData()
-        if not natura or loc_id is None:
-            return QMessageBox.warning(self, "Dati Mancanti",
-                                       "Natura e Località sono obbligatori.")
-        self._wiz.immobili_data.append({
-            'natura': natura,
-            'localita_id': loc_id,
-            'localita_nome': self._loc_combo.currentText(),
-            'classificazione': self._class_edit.text().strip(),
-            'consistenza': self._consist_edit.text().strip(),
-            'numero_piani': self._piani_spin.value(),
-            'numero_vani': self._vani_spin.value(),
-        })
-        self._refresh_table()
-        self._natura_edit.clear()
-        self._class_edit.clear()
-        self._consist_edit.clear()
-        self._loc_combo.setCurrentIndex(0)
-        self._piani_spin.setValue(0)
-        self._vani_spin.setValue(0)
-
-    def _remove_selected(self):
-        rows = self._table.selectedIndexes()
-        if not rows:
-            return
-        row = rows[0].row()
-        if 0 <= row < len(self._wiz.immobili_data):
-            del self._wiz.immobili_data[row]
-            self._refresh_table()
-
-    def _refresh_table(self):
-        data = self._wiz.immobili_data
-        self._table.setRowCount(len(data))
-        for i, imm in enumerate(data):
-            pv = ""
-            if imm.get('numero_piani'):
-                pv += f"P:{imm['numero_piani']}"
-            if imm.get('numero_vani'):
-                pv += f"  V:{imm['numero_vani']}"
-            self._table.setItem(i, 0, QTableWidgetItem(imm.get('natura', '')))
-            self._table.setItem(i, 1, QTableWidgetItem(imm.get('localita_nome', '')))
-            self._table.setItem(i, 2, QTableWidgetItem(imm.get('classificazione', '')))
-            self._table.setItem(i, 3, QTableWidgetItem(imm.get('consistenza', '')))
-            self._table.setItem(i, 4, QTableWidgetItem(pv.strip()))
-        self.completeChanged.emit()
-
-    def isComplete(self):
-        return len(self._wiz.immobili_data) >= 1
-
-
-class _RiepilogoPage(QWizardPage):
-    def __init__(self, wizard_ref: 'RegistrazioneProprietaWizard'):
-        super().__init__()
-        self._wiz = wizard_ref
-        self.setTitle("Passo 4 — Riepilogo e Conferma")
-        self.setSubTitle(
-            "Verifica i dati inseriti e premi «Registra» per salvare nel database.")
-        lay = QVBoxLayout(self)
-        self._text = QTextEdit()
-        self._text.setReadOnly(True)
-        lay.addWidget(self._text)
-
-    def initializePage(self):
-        wiz = self._wiz
-        suffisso_display = f" / Suffisso: {wiz.suffisso_partita}" if wiz.suffisso_partita else ""
-        poss_lines = "\n".join(
-            f"  • {p['nome_completo']}  —  {p.get('titolo', 'N/D')}  —  Quota: {p.get('quota', 'N/D')}"
-            for p in wiz.possessori_data
-        )
-        imm_lines = "\n".join(
-            f"  • {i.get('natura', '')} in {i.get('localita_nome', '')}  "
-            f"[{i.get('classificazione', '')}]  {i.get('consistenza', '')}"
-            for i in wiz.immobili_data
-        )
-        self._text.setPlainText(
-            f"COMUNE\n"
-            f"  {wiz.comune_nome}  (ID: {wiz.comune_id})\n\n"
-            f"PARTITA\n"
-            f"  N. {wiz.numero_partita}{suffisso_display}\n"
-            f"  Data impianto: {wiz.data_impianto}\n\n"
-            f"POSSESSORI  ({len(wiz.possessori_data)})\n{poss_lines}\n\n"
-            f"IMMOBILI  ({len(wiz.immobili_data)})\n{imm_lines}"
-        )
-
-    def validatePage(self):
-        return self._wiz._salva_proprieta()
-
-
-class RegistrazioneProprietaWizard(QWizard):
-    """Wizard a 4 passi per la registrazione di una nuova proprietà catastale."""
-
-    def __init__(self, db_manager: 'CatastoDBManager', parent=None):
-        super().__init__(parent)
-        self.db_manager = db_manager
-        self.logger = logging.getLogger("CatastoGUI.RegistrazioneWizard")
-
-        self.comune_id: Optional[int] = None
-        self.comune_nome: str = ""
-        self.numero_partita: int = 1
-        self.suffisso_partita: Optional[str] = None
-        self.data_impianto = None
-        self.possessori_data: List[Dict[str, Any]] = []
-        self.immobili_data: List[Dict[str, Any]] = []
-        self.localita_cache: List[Dict[str, Any]] = []
-        self.possessori_cache: List[Dict[str, Any]] = []
-        self.immobili_cache: List[Dict[str, Any]] = []
-        self.nuova_partita_id: Optional[int] = None
-
-        self.setWindowTitle("Registrazione Nuova Proprietà")
-        self.setWizardStyle(QWizard.ModernStyle)
-        self.setMinimumSize(780, 560)
-        self.setOption(QWizard.NoBackButtonOnStartPage, True)
-        self.setButtonText(QWizard.FinishButton, "Registra")
-        self.setButtonText(QWizard.NextButton, "Avanti >")
-        self.setButtonText(QWizard.BackButton, "< Indietro")
-        self.setButtonText(QWizard.CancelButton, "Annulla")
-
-        self.addPage(_DatiPartitaPage(self))
-        self.addPage(_PossessoriPage(self))
-        self.addPage(_ImmobiliPage(self))
-        self.addPage(_RiepilogoPage(self))
-
-    def _load_possessori(self):
-        self.possessori_cache = []
-        try:
-            self.possessori_cache = self.db_manager.search_possessori_by_term_globally(
-                None, limit=5000)
-        except Exception as e:
-            self.logger.error(f"Errore caricamento possessori: {e}")
-
-    def _load_localita(self):
-        if not self.comune_id:
-            return
-        try:
-            self.localita_cache = self.db_manager.get_localita_by_comune(self.comune_id)
-        except Exception as e:
-            self.logger.error(f"Errore caricamento località: {e}")
-
-    def _load_immobili(self):
-        if not self.comune_id:
-            return
-        try:
-            self.immobili_cache = self.db_manager.get_immobili_by_comune(self.comune_id)
-        except Exception as e:
-            self.logger.error(f"Errore caricamento immobili: {e}")
-
-    def _salva_proprieta(self) -> bool:
-        try:
-            possessori_json = json.dumps(self.possessori_data)
-            immobili_json = json.dumps(self.immobili_data)
-        except TypeError as te:
-            self.logger.error(f"Errore serializzazione: {te}")
-            QMessageBox.critical(self, "Errore Dati",
-                                 f"Errore nella preparazione dei dati:\n{te}")
-            return False
-        try:
-            pid = self.db_manager.registra_nuova_proprieta(
-                comune_id=self.comune_id,
-                numero_partita=self.numero_partita,
-                data_impianto=self.data_impianto,
-                possessori_json_str=possessori_json,
-                immobili_json_str=immobili_json,
-                suffisso_partita=self.suffisso_partita,
-            )
-            if pid is not None:
-                self.nuova_partita_id = pid
-                self.logger.info(f"Registrazione completata: partita ID {pid}")
-                return True
-            QMessageBox.critical(self, "Errore",
-                                 "Il salvataggio non ha restituito un ID valido.")
-            return False
-        except (DBUniqueConstraintError, DBDataError, DBMError) as e:
-            self.logger.error(f"Errore DB registrazione: {e}")
-            QMessageBox.critical(self, "Errore Database", str(e))
-            return False
-        except Exception as e:
-            self.logger.critical(f"Errore imprevisto: {e}", exc_info=True)
-            QMessageBox.critical(self, "Errore Imprevisto", f"{type(e).__name__}: {e}")
-            return False
-
-
 class RegistrazioneProprietaWidget(LazyLoadedWidget):
     partita_creata_per_operazioni_collegate = pyqtSignal(int, int)
 
     def __init__(self, db_manager: 'CatastoDBManager', parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
+        self.comune_id: Optional[int] = None
+        self.possessori_data: List[Dict[str, Any]] = []
+        self.immobili_data: List[Dict[str, Any]] = []
+        self.localita_cache: List[Dict[str, Any]] = []
+        self.possessori_cache: List[Dict[str, Any]] = []
+        self.immobili_cache: List[Dict[str, Any]] = []
         self._initUI()
 
     def _initUI(self):
-        layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignCenter)
+        main_layout = QVBoxLayout(self)
+        scroll_area = QScrollArea(); scroll_area.setWidgetResizable(True)
+        main_layout.addWidget(scroll_area)
+        container_widget = QWidget(); layout = QVBoxLayout(container_widget)
+        scroll_area.setWidget(container_widget)
+        
+        # --- 1. DATI PARTITA (LAYOUT COMPATTO) ---
+        form_group = QGroupBox("1. Dati della Nuova Partita")
+        form_layout = QGridLayout(form_group)
+        self.comune_display = QLabel("Nessun comune selezionato."); self.comune_display.setStyleSheet("font-weight: bold;")
+        self.comune_button = QPushButton("Seleziona Comune..."); self.comune_button.clicked.connect(self._select_comune)
+        form_layout.addWidget(QLabel("Comune (*):"), 0, 0); form_layout.addWidget(self.comune_display, 0, 1, 1, 2)
+        form_layout.addWidget(self.comune_button, 0, 3)
+        
+        # --- INIZIO MODIFICA LAYOUT ---
+        self.num_partita_edit = QSpinBox(); self.num_partita_edit.setRange(1, 9999999)
+        self.suffisso_partita_edit = QLineEdit(); self.suffisso_partita_edit.setPlaceholderText("Es. A"); self.suffisso_partita_edit.setMaximumWidth(80)
+        self.data_edit = QDateEdit(calendarPopup=True); self.data_edit.setDate(QDate.currentDate()); self.data_edit.setDisplayFormat("yyyy-MM-dd")
+        
+        partita_line_layout = QHBoxLayout()
+        partita_line_layout.addWidget(QLabel("Numero Partita (*):")); partita_line_layout.addWidget(self.num_partita_edit)
+        partita_line_layout.addWidget(QLabel("Suffisso:")); partita_line_layout.addWidget(self.suffisso_partita_edit)
+        partita_line_layout.addStretch()
+        form_layout.addLayout(partita_line_layout, 1, 0, 1, 4)
+        
+        form_layout.addWidget(QLabel("Data Impianto (*):"), 2, 0); form_layout.addWidget(self.data_edit, 2, 1)
+        # --- FINE MODIFICA LAYOUT ---
+        
+        layout.addWidget(form_group)
 
-        desc = QLabel(
-            "La procedura guidata accompagna passo dopo passo\n"
-            "la registrazione di una nuova proprietà catastale.\n\n"
-            "  Passo 1  —  Comune e dati partita\n"
-            "  Passo 2  —  Possessori\n"
-            "  Passo 3  —  Immobili\n"
-            "  Passo 4  —  Riepilogo e conferma"
+        # --- 2. POSSESSORI (FLUSSO MIGLIORATO) ---
+        possessori_group = QGroupBox("2. Possessori Associati")
+        possessori_layout = QVBoxLayout(possessori_group)
+        self.possessori_table = QTableWidget(); self.possessori_table.setColumnCount(4); self.possessori_table.setHorizontalHeaderLabels(["ID", "Nome Completo", "Titolo", "Quota"])
+        self.possessori_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch); self.possessori_table.setMinimumHeight(120)
+        self.btn_rem_poss = QPushButton("Rimuovi Selezionato"); self.btn_rem_poss.clicked.connect(self.remove_possessore)
+        possessori_layout.addWidget(self.possessori_table); possessori_layout.addWidget(self.btn_rem_poss, 0, Qt.AlignRight)
+        
+        add_poss_group = QGroupBox("Aggiungi Possessore"); add_poss_layout = QGridLayout(add_poss_group)
+        self.possessore_search_combo = QComboBox(); self.possessore_search_combo.setEditable(True); self.possessore_search_combo.setPlaceholderText("Cerca possessore esistente...")
+        self.possessore_search_combo.completer().setCompletionMode(QCompleter.PopupCompletion); self.possessore_search_combo.completer().setFilterMode(Qt.MatchContains)
+        self.btn_add_selected_poss = QPushButton("Aggiungi Selezionato"); self.btn_add_selected_poss.clicked.connect(self._add_selected_possessore)
+        self.btn_create_new_poss = QPushButton("Crea Nuovo..."); self.btn_create_new_poss.clicked.connect(self._create_and_add_new_possessore)
+        add_poss_layout.addWidget(QLabel("Cerca:"), 0, 0); add_poss_layout.addWidget(self.possessore_search_combo, 0, 1)
+        add_poss_layout.addWidget(self.btn_add_selected_poss, 0, 2); add_poss_layout.addWidget(self.btn_create_new_poss, 0, 3)
+        possessori_layout.addWidget(add_poss_group); layout.addWidget(possessori_group)
+
+        # --- 3. IMMOBILI (FLUSSO MIGLIORATO) ---
+        immobili_group = QGroupBox("3. Immobili Associati"); immobili_layout = QVBoxLayout(immobili_group)
+        self.immobili_table = QTableWidget(); self.immobili_table.setColumnCount(5); self.immobili_table.setHorizontalHeaderLabels(["Natura", "Località", "Classificazione", "Consistenza", "Piani/Vani"])
+        self.immobili_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch); self.immobili_table.setMinimumHeight(120)
+        self.btn_rem_imm = QPushButton("Rimuovi Selezionato"); self.btn_rem_imm.clicked.connect(self.remove_immobile)
+        immobili_layout.addWidget(self.immobili_table); immobili_layout.addWidget(self.btn_rem_imm, 0, Qt.AlignRight)
+        add_imm_tabs = QTabWidget(); add_imm_tabs.addTab(self._create_add_immobile_esistente_tab(), "Aggiungi Esistente"); add_imm_tabs.addTab(self._create_add_immobile_nuovo_tab(), "Crea Nuovo")
+        immobili_layout.addWidget(add_imm_tabs); layout.addWidget(immobili_group)
+
+        # --- 4. REGISTRAZIONE FINALE ---
+        self.btn_registra_proprieta = QPushButton("Registra Nuova Proprietà e Tutti i Componenti"); self.btn_registra_proprieta.clicked.connect(self._salva_proprieta)
+        self.btn_registra_proprieta.setStyleSheet("font-weight: bold; padding: 10px; background-color: #d4edda; border: 1px solid #c3e6cb;"); 
+        self.btn_registra_proprieta.setEnabled(False) # Inizia disabilitato
+        layout.addWidget(self.btn_registra_proprieta); layout.addStretch(1)
+        
+        self._update_registra_button_state()
+
+    # --- NUOVO METODO PER AGGIORNARE LO STATO DEL PULSANTE ---
+    def _update_registra_button_state(self):
+        """
+        Abilita il pulsante di registrazione finale solo se tutte le 
+        condizioni necessarie sono soddisfatte.
+        """
+        is_ready = bool(
+            self.comune_id and      # Deve essere selezionato un comune
+            self.possessori_data and  # La lista possessori non deve essere vuota
+            self.immobili_data       # La lista immobili non deve essere vuota
         )
-        desc.setAlignment(Qt.AlignCenter)
-        desc.setStyleSheet("font-size: 10pt; color: #444;")
+        self.btn_registra_proprieta.setEnabled(is_ready)
 
-        btn = QPushButton("Avvia Registrazione Guidata…")
-        btn.setStyleSheet("font-size: 13pt; font-weight: bold; padding: 16px 48px;")
-        btn.clicked.connect(self._launch_wizard)
+        if is_ready:
+            self.btn_registra_proprieta.setToolTip("Pronto per registrare la proprietà nel database.")
+        else:
+            reasons = []
+            if not self.comune_id: reasons.append("selezionare un comune")
+            if not self.possessori_data: reasons.append("aggiungere almeno un possessore")
+            if not self.immobili_data: reasons.append("aggiungere almeno un immobile")
+            tooltip_text = f"Per abilitare, è necessario: {', '.join(reasons)}."
+            self.btn_registra_proprieta.setToolTip(tooltip_text)
 
-        layout.addStretch()
-        layout.addWidget(desc, alignment=Qt.AlignCenter)
-        layout.addSpacing(24)
-        layout.addWidget(btn, alignment=Qt.AlignCenter)
-        layout.addStretch()
+    
+    def _create_add_immobile_esistente_tab(self):
+        widget = QWidget(); layout = QGridLayout(widget)
+        self.imm_search_combo = QComboBox(); self.imm_search_combo.setEditable(True); self.imm_search_combo.setPlaceholderText("Seleziona prima un comune...")
+        self.imm_search_combo.setEnabled(False); self.imm_search_combo.completer().setCompletionMode(QCompleter.PopupCompletion); self.imm_search_combo.completer().setFilterMode(Qt.MatchContains)
+        self.btn_add_existing_imm = QPushButton("Aggiungi Selezionato"); self.btn_add_existing_imm.clicked.connect(self._add_existing_immobile)
+        layout.addWidget(QLabel("Cerca Immobile:"), 0, 0); layout.addWidget(self.imm_search_combo, 0, 1); layout.addWidget(self.btn_add_existing_imm, 0, 2)
+        return widget
+
+    def _create_add_immobile_nuovo_tab(self):
+        widget = QWidget(); layout = QGridLayout(widget)
+        self.imm_natura_edit = QLineEdit(); layout.addWidget(QLabel("Natura (*):"), 0, 0); layout.addWidget(self.imm_natura_edit, 0, 1)
+        self.imm_localita_combo = QComboBox(); self.imm_localita_combo.setPlaceholderText("Seleziona prima un comune..."); self.imm_localita_combo.setEnabled(False)
+        layout.addWidget(QLabel("Località (*):"), 0, 2); layout.addWidget(self.imm_localita_combo, 0, 3)
+        self.imm_classificazione_edit = QLineEdit(); layout.addWidget(QLabel("Classificazione:"), 1, 0); layout.addWidget(self.imm_classificazione_edit, 1, 1)
+        self.imm_consistenza_edit = QLineEdit(); layout.addWidget(QLabel("Consistenza:"), 1, 2); layout.addWidget(self.imm_consistenza_edit, 1, 3)
+        self.imm_piani_spin = QSpinBox(); self.imm_piani_spin.setRange(0, 99); layout.addWidget(QLabel("Piani:"), 2, 0); layout.addWidget(self.imm_piani_spin, 2, 1)
+        self.imm_vani_spin = QSpinBox(); self.imm_vani_spin.setRange(0, 99); layout.addWidget(QLabel("Vani:"), 2, 2); layout.addWidget(self.imm_vani_spin, 2, 3)
+        self.btn_add_inline_immobile = QPushButton("Aggiungi alla Lista"); self.btn_add_inline_immobile.clicked.connect(self._add_inline_immobile)
+        layout.addWidget(self.btn_add_inline_immobile, 3, 3, Qt.AlignRight)
+        return widget
 
     def _load_data_on_first_show(self):
-        pass
+        """
+        Metodo per il lazy loading. Carica la lista globale dei possessori
+        la prima volta che questo widget viene visualizzato.
+        """
+        self.logger.info("Esecuzione lazy loading per RegistrazioneProprietaWidget...")
+        self._load_possessori_for_combo()
 
-    def _launch_wizard(self):
-        try:
-            wiz = RegistrazioneProprietaWizard(self.db_manager, self)
-        except Exception as e:
-            self.logger.critical(f"Impossibile aprire il wizard di registrazione: {e}", exc_info=True)
-            QMessageBox.critical(self, "Errore", f"Impossibile aprire il wizard:\n{type(e).__name__}: {e}")
+    def _select_comune(self):
+        dialog = ComuneSelectionDialog(self.db_manager, self)
+        if dialog.exec_() == QDialog.Accepted and dialog.selected_comune_id:
+            self.comune_id = dialog.selected_comune_id
+            self.comune_display.setText(f"{dialog.selected_comune_name} (ID: {self.comune_id})")
+            self.logger.info(f"Comune selezionato ID: {self.comune_id}. Caricamento dati dipendenti...")
+            self._load_localita_for_combo()
+            self._load_immobili_for_combo()
+            self._load_possessori_for_combo()
+            self._update_registra_button_state()
+
+    def _load_possessori_for_combo(self):
+        """Carica tutti i possessori per la combobox di ricerca."""
+        if self.possessori_cache: # Non ricaricare se la cache è già piena
             return
-        if wiz.exec_() == QWizard.Accepted and wiz.nuova_partita_id:
-            pid = wiz.nuova_partita_id
-            cid = wiz.comune_id
-            suffisso_display = (f" (Suffisso: {wiz.suffisso_partita})"
-                                if wiz.suffisso_partita else "")
-            reply = QMessageBox.question(
-                self, "Registrazione Completata",
-                f"Partita N.{wiz.numero_partita}{suffisso_display} "
-                f"(ID: {pid}) registrata con successo.\n\n"
-                "Vuoi procedere con operazioni collegate "
-                "(duplicazione, variazione)?",
-                QMessageBox.Yes | QMessageBox.No, QMessageBox.No
-            )
-            if reply == QMessageBox.Yes:
-                self.partita_creata_per_operazioni_collegate.emit(pid, cid)
+        self.possessore_search_combo.clear(); self.possessore_search_combo.addItem("--- Cerca o Seleziona ---", None)
+        try:
+            self.possessori_cache = self.db_manager.search_possessori_by_term_globally(None, limit=5000)
+            for poss in self.possessori_cache:
+                self.possessore_search_combo.addItem(f"{poss['nome_completo']} (Comune: {poss['comune_riferimento_nome']})", poss['id'])
+            self.logger.info(f"Caricati {len(self.possessori_cache)} possessori nella combobox.")
+        except DBMError as e:
+            self.logger.error(f"Errore caricamento possessori globali: {e}")
 
+    def _load_localita_for_combo(self):
+        self.imm_localita_combo.clear()
+        self.imm_localita_combo.setEnabled(False)
+        self.imm_localita_combo.addItem("--- Caricamento ---", None)
+        if not self.comune_id: return
+        try:
+            self.localita_cache = self.db_manager.get_localita_by_comune(self.comune_id)
+            self.imm_localita_combo.clear()
+            if self.localita_cache:
+                self.imm_localita_combo.addItem("--- Seleziona Località ---", None)
+                for loc in self.localita_cache:
+                    self.imm_localita_combo.addItem(f"{loc['nome']} ({loc.get('tipo', 'N/D')})", loc['id'])
+                self.imm_localita_combo.setEnabled(True)
+            else:
+                self.imm_localita_combo.addItem("Nessuna località per questo comune", None)
+        except DBMError as e: self.logger.error(f"Errore caricamento località: {e}")
+
+
+    def _load_immobili_for_combo(self):
+        self.imm_search_combo.clear()
+        self.imm_search_combo.setEnabled(False)
+        self.imm_search_combo.addItem("--- Caricamento ---", None)
+        if not self.comune_id: return
+        try:
+            self.immobili_cache = self.db_manager.get_immobili_by_comune(self.comune_id)
+            self.imm_search_combo.clear()
+            if self.immobili_cache:
+                self.imm_search_combo.addItem("--- Cerca Immobile Esistente ---", None)
+                for imm in self.immobili_cache:
+                    self.imm_search_combo.addItem(f"{imm['natura']} in {imm['localita_nome']}", imm['id'])
+                self.imm_search_combo.setEnabled(True)
+            else:
+                self.imm_search_combo.addItem("Nessun immobile in questo comune", None)
+        except DBMError as e: self.logger.error(f"Errore caricamento immobili: {e}")
+     # Nuovi Metodi Slot per i pulsanti inline
+    def _add_selected_possessore(self):
+        possessore_id = self.possessore_search_combo.currentData()
+        if not possessore_id: return QMessageBox.warning(self, "Selezione Mancante", "Seleziona un possessore.")
+
+        # Evita duplicati
+        if any(p['id'] == possessore_id for p in self.possessori_data):
+            return QMessageBox.information(self, "Già Presente", "Questo possessore è già nella lista.")
+
+        dettagli = DettagliLegamePossessoreDialog.get_details_for_new_legame(self.possessore_search_combo.currentText(), 'principale', self)
+        if dettagli:
+            self.possessori_data.append({"id": possessore_id, "nome_completo": self.possessore_search_combo.currentText(), **dettagli})
+            self.update_possessori_table()
+
+
+    def _create_and_add_new_possessore(self):
+        dialog = CreatePossessoreDialog(self.db_manager, self)
+        if dialog.exec_() == QDialog.Accepted and dialog.nuovo_possessore_dati:
+            poss_info = dialog.nuovo_possessore_dati
+            self._load_possessori_for_combo() # Ricarica la lista per includere il nuovo
+            # Aggiungi direttamente alla lista della partita corrente
+            dettagli = DettagliLegamePossessoreDialog.get_details_for_new_legame(poss_info.get('nome_completo'), 'principale', self)
+            if dettagli:
+                self.possessori_data.append({"id": poss_info['id'], "nome_completo": poss_info['nome_completo'], **dettagli})
+                self.update_possessori_table()
+    def _add_existing_immobile(self):
+        immobile_id = self.imm_search_combo.currentData()
+        if not immobile_id: return QMessageBox.warning(self, "Selezione Mancante", "Seleziona un immobile.")
+
+        if any(i.get('id') == immobile_id for i in self.immobili_data):
+            return QMessageBox.information(self, "Già Presente", "Questo immobile è già nella lista.")
+
+        # Trova i dettagli dell'immobile dalla cache
+        imm_details = next((i for i in self.immobili_cache if i['id'] == immobile_id), None)
+        if imm_details:
+            self.immobili_data.append(imm_details)
+            self.update_immobili_table()
+
+    def _add_inline_immobile(self):
+        natura = self.imm_natura_edit.text().strip()
+        localita_id = self.imm_localita_combo.currentData()
+        if not natura or localita_id is None: return QMessageBox.warning(self, "Dati Mancanti", "Natura e Località sono obbligatori.")
+
+        immobile_dict = {
+            'natura': natura,
+            'localita_id': localita_id,
+            'localita_nome': self.imm_localita_combo.currentText(),
+            'classificazione': self.imm_classificazione_edit.text().strip(),
+            'consistenza': self.imm_consistenza_edit.text().strip(),
+            'numero_piani': self.imm_piani_spin.value(),
+            'numero_vani': self.imm_vani_spin.value()
+        }  # (come prima)
+        self.immobili_data.append(immobile_dict)
+        self.update_immobili_table()
+        self._pulisci_form_immobile()
+
+    def _pulisci_form_immobile(self):
+        self.imm_natura_edit.clear(); self.imm_classificazione_edit.clear(); self.imm_consistenza_edit.clear()
+        self.imm_localita_combo.setCurrentIndex(0); self.imm_piani_spin.setValue(0); self.imm_vani_spin.setValue(0)
+    
+    def update_possessori_table(self):
+        self.possessori_table.setRowCount(len(self.possessori_data))
+        for i, dati in enumerate(self.possessori_data):
+            self.possessori_table.setItem(i, 0, QTableWidgetItem(str(dati.get('id'))))
+            self.possessori_table.setItem(i, 1, QTableWidgetItem(dati.get('nome_completo')))
+            self.possessori_table.setItem(i, 2, QTableWidgetItem(dati.get('titolo')))
+            self.possessori_table.setItem(i, 3, QTableWidgetItem(dati.get('quota')))
+        self._update_registra_button_state()
+        
+    def update_immobili_table(self):
+        self.immobili_table.setRowCount(len(self.immobili_data))
+        for i, imm in enumerate(self.immobili_data):
+            immobile = imm if isinstance(imm, dict) else imm.to_dict()  # Assicurati che sia un dizionario
+            self.immobili_table.setItem(
+                i, 0, QTableWidgetItem(immobile.get('natura', '')))
+            self.immobili_table.setItem(i, 1, QTableWidgetItem(
+                immobile.get('localita_nome', '')))
+            self.immobili_table.setItem(i, 2, QTableWidgetItem(
+                immobile.get('classificazione', '')))
+            self.immobili_table.setItem(
+                i, 3, QTableWidgetItem(immobile.get('consistenza', '')))
+
+            piani_vani = ""
+            if 'numero_piani' in immobile and immobile['numero_piani']:
+                piani_vani += f"Piani: {immobile['numero_piani']}"
+            if 'numero_vani' in immobile and immobile['numero_vani']:
+                if piani_vani:
+                    piani_vani += ", "
+                piani_vani += f"Vani: {immobile['numero_vani']}"
+
+            self.immobili_table.setItem(i, 4, QTableWidgetItem(piani_vani))
+        self._update_registra_button_state()
+    def remove_possessore(self):
+        """Rimuove il possessore selezionato dalla lista."""
+        selected_rows = self.possessori_table.selectedIndexes()
+        if not selected_rows:
+            QMessageBox.warning(self, "Attenzione",
+                                "Seleziona un possessore da rimuovere.")
+            return
+
+        row = selected_rows[0].row()
+        if 0 <= row < len(self.possessori_data):
+            del self.possessori_data[row]
+            self.update_possessori_table()
+        self._update_registra_button_state()
+        
+    def remove_immobile(self):
+        """Rimuove l'immobile selezionato dalla lista."""
+        selected_rows = self.immobili_table.selectedIndexes()
+        if not selected_rows:
+            QMessageBox.warning(self, "Attenzione",
+                                "Seleziona un immobile da rimuovere.")
+            return
+
+        row = selected_rows[0].row()
+        if 0 <= row < len(self.immobili_data):
+            del self.immobili_data[row]
+            self.update_immobili_table()
+        self._update_registra_button_state()
+        
+    
+        
+    def _salva_proprieta(self):
+        self.logger.info("Avvio registrazione nuova proprietà...")
+        if not self.comune_id:
+            QMessageBox.warning(self, "Dati Mancanti", "Selezionare un comune.")
+            return
+        if not self.possessori_data:
+            QMessageBox.warning(self, "Dati Mancanti", "Aggiungere almeno un possessore.")
+            return
+        if not self.immobili_data:
+            QMessageBox.warning(self, "Dati Mancanti", "Aggiungere almeno un immobile.")
+            return
+
+        numero_partita = self.num_partita_edit.value()
+        # Legge correttamente il valore del suffisso dalla UI
+        suffisso_partita = self.suffisso_partita_edit.text().strip() or None 
+        data_impianto_dt = self.data_edit.date().toPyDate()
+
+        try:
+            possessori_json_str = json.dumps(self.possessori_data)
+            immobili_json_str = json.dumps(self.immobili_data)
+        except TypeError as te:
+            self.logger.error(f"Errore serializzazione JSON per nuova proprietà: {te}")
+            QMessageBox.critical(self, "Errore Dati", f"Errore nella preparazione dei dati per il database: {te}")
+            return
+
+        try:
+            # Chiamata al DB Manager, ora completa con tutti gli argomenti
+            nuova_partita_id = self.db_manager.registra_nuova_proprieta(
+                comune_id=self.comune_id,
+                numero_partita=numero_partita,
+                data_impianto=data_impianto_dt,
+                possessori_json_str=possessori_json_str,
+                immobili_json_str=immobili_json_str,
+                suffisso_partita=suffisso_partita  # <<< QUESTA È LA RIGA MANCANTE, ORA AGGIUNTA
+            )
+
+            if nuova_partita_id is not None and self.comune_id is not None:
+                suffisso_display = f" (Suffisso: {suffisso_partita})" if suffisso_partita else ""
+                msg_success = f"Nuova proprietà (Partita N.{numero_partita}{suffisso_display}, ID: {nuova_partita_id}) registrata con successo."
+                self.logger.info(msg_success)
+
+                reply = QMessageBox.question(self, "Registrazione Completata",
+                                             f"{msg_success}\n\nVuoi procedere con operazioni collegate (es. Duplicazione) su questa o un'altra partita?",
+                                             QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+
+                if reply == QMessageBox.Yes:
+                    self.partita_creata_per_operazioni_collegate.emit(nuova_partita_id, self.comune_id)
+
+                self._pulisci_form_registrazione()
+
+        except (DBUniqueConstraintError, DBDataError, DBMError) as e_db:
+            self.logger.error(f"Errore DB registrazione proprietà: {e_db}")
+            QMessageBox.critical(self, "Errore Database", str(e_db))
+        except Exception as e_gen:
+            self.logger.critical(f"Errore imprevisto registrazione proprietà: {e_gen}", exc_info=True)
+            QMessageBox.critical(self, "Errore Imprevisto", f"Errore: {type(e_gen).__name__}: {e_gen}")
+        self.logger.info("Registrazione proprietà completata.")
+
+
+    def _pulisci_form_registrazione(self):
+       
+        logging.getLogger("CatastoGUI").info(
+            "Pulizia campi del form Registrazione Proprietà.")
+
+        # Reset Comune selezionato
+        self.comune_id = None
+        self.comune_display_name = None  # Se usa una variabile per il nome del comune
+        if hasattr(self, 'comune_display') and isinstance(self.comune_display, QLabel):
+            self.comune_display.setText("Nessun comune selezionato")
+
+        # Reset Numero Partita
+        if hasattr(self, 'num_partita_edit') and isinstance(self.num_partita_edit, QSpinBox):
+            # O un valore di default sensato come 1
+            self.num_partita_edit.setValue(self.num_partita_edit.minimum())
+
+        # Reset Data Impianto
+        if hasattr(self, 'data_edit') and isinstance(self.data_edit, QDateEdit):
+            self.data_edit.setDate(QDate.currentDate())
+
+        # Reset liste dati interni
+        self.possessori_data = []
+        self.immobili_data = []
+
+        # Aggiorna/Pulisci le tabelle UI dei possessori e immobili (se le ha)
+        # Metodo che popola/pulisce la QTableWidget dei possessori
+        if hasattr(self, 'update_possessori_table'):
+            self.update_possessori_table()
+        # Alternativa se non c'è update_xxx
+        elif hasattr(self, 'possessori_table') and isinstance(self.possessori_table, QTableWidget):
+            self.possessori_table.setRowCount(0)
+
+        # Metodo che popola/pulisce la QTableWidget degli immobili
+        if hasattr(self, 'update_immobili_table'):
+            self.update_immobili_table()
+        elif hasattr(self, 'immobili_table') and isinstance(self.immobili_table, QTableWidget):
+            self.immobili_table.setRowCount(0)
+
+        # Imposta il focus su un campo iniziale, ad esempio il pulsante per selezionare il comune
+        if hasattr(self, 'comune_button') and isinstance(self.comune_button, QPushButton):
+            self.comune_button.setFocus()
+        elif hasattr(self, 'num_partita_edit'):  # O il campo numero partita
+            self.num_partita_edit.setFocus()
+
+        logging.getLogger("CatastoGUI").info(
+            "Campi form Registrazione Proprietà puliti.")
+   
 
 class OperazioniPartitaWidget(QWidget):
     # Aggiungi questo __init__ se non c'è

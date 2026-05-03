@@ -27,7 +27,7 @@ class TestEmergencyRestore:
         manager.create_clean_environment = MagicMock()
         return manager
 
-    @patch('catasto_db_manager.QProcess')
+    @patch('db_modules.sistema_mixin.QProcess')
     def test_emergency_restore_success(self, mock_qprocess_class, mock_db_manager):
         """Verifica che il ripristino abbia successo se tutti e 3 i processi terminano correttamente."""
         mock_process_instance = MagicMock()
@@ -54,7 +54,7 @@ class TestEmergencyRestore:
         assert success is False
         assert "Impossibile trovare gli eseguibili" in msg
 
-    @patch('catasto_db_manager.QProcess')
+    @patch('db_modules.sistema_mixin.QProcess')
     def test_emergency_restore_process_timeout(self, mock_qprocess_class, mock_db_manager):
         """Verifica la gestione di un timeout o crash durante l'esecuzione del processo."""
         mock_process_instance = MagicMock()
@@ -72,7 +72,7 @@ class TestEmergencyRestore:
         # Si deve interrompere al primo comando (dropdb) senza eseguire gli altri
         assert mock_process_instance.start.call_count == 1
 
-    @patch('catasto_db_manager.QProcess')
+    @patch('db_modules.sistema_mixin.QProcess')
     def test_emergency_restore_process_exit_error(self, mock_qprocess_class, mock_db_manager):
         """Verifica la gestione di un errore restituito dal tool da riga di comando (exit code != 0)."""
         mock_process_instance = MagicMock()

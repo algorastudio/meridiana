@@ -609,7 +609,7 @@ class PartitaDetailsDialog(QDialog):
         self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
 
         self.setWindowTitle(
-            f"Dettagli Partita {partita_data['numero_partita']}")
+            f"Dettagli Partita {partita_data.numero_partita}")
         self.setMinimumSize(700, 500)
 
         self._init_ui()
@@ -628,12 +628,12 @@ class PartitaDetailsDialog(QDialog):
 
         # Con questa logica più robusta:
         header_layout = QHBoxLayout()
-        suffisso_db = self.partita.get('suffisso_partita')
+        suffisso_db = self.partita.suffisso_partita
 
         # Controlliamo se il suffisso esiste e non è una stringa vuota
         suffisso_display = f" ({suffisso_db.strip()})" if suffisso_db and suffisso_db.strip() else ""
 
-        titolo_completo = f"<h2>Partita N.{self.partita['numero_partita']}{suffisso_display} - {self.partita['comune_nome']}</h2>"
+        titolo_completo = f"<h2>Partita N.{self.partita.numero_partita}{suffisso_display} - {self.partita.comune_nome}</h2>"
         title_label = QLabel(titolo_completo)
 
         
@@ -645,24 +645,24 @@ class PartitaDetailsDialog(QDialog):
         info_layout = QGridLayout()
 
         info_layout.addWidget(QLabel("<b>ID:</b>"), 0, 0)
-        info_layout.addWidget(QLabel(str(self.partita['id'])), 0, 1)
+        info_layout.addWidget(QLabel(str(self.partita.id)), 0, 1)
 
         info_layout.addWidget(QLabel("<b>Tipo:</b>"), 0, 2)
-        info_layout.addWidget(QLabel(self.partita['tipo']), 0, 3)
+        info_layout.addWidget(QLabel(self.partita.tipo or ''), 0, 3)
 
         info_layout.addWidget(QLabel("<b>Stato:</b>"), 1, 0)
-        info_layout.addWidget(QLabel(self.partita['stato']), 1, 1)
+        info_layout.addWidget(QLabel(self.partita.stato or ''), 1, 1)
 
         info_layout.addWidget(QLabel("<b>Data Impianto:</b>"), 1, 2)
-        info_layout.addWidget(QLabel(str(self.partita['data_impianto'])), 1, 3)
+        info_layout.addWidget(QLabel(str(self.partita.data_impianto) if self.partita.data_impianto else ''), 1, 3)
 
         # NUOVA RIGA: Suffisso Partita
         info_layout.addWidget(QLabel("<b>Suffisso:</b>"), 2, 2) # Adatta la riga/colonna
-        info_layout.addWidget(QLabel(self.partita.get('suffisso_partita', 'N/A')), 2, 3)
+        info_layout.addWidget(QLabel(self.partita.suffisso_partita or 'N/A'), 2, 3)
 
-        if self.partita.get('data_chiusura'):
+        if self.partita.data_chiusura:
             info_layout.addWidget(QLabel("<b>Data Chiusura:</b>"), 2, 0) # Adatta la riga
-            info_layout.addWidget(QLabel(str(self.partita['data_chiusura'])), 2, 1)
+            info_layout.addWidget(QLabel(str(self.partita.data_chiusura)), 2, 1)
         
         info_group.setLayout(info_layout)
         layout.addWidget(info_group)
@@ -689,13 +689,13 @@ class PartitaDetailsDialog(QDialog):
         header_possessori.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         header_possessori.setSectionResizeMode(3, QHeaderView.ResizeToContents)
 # --- FINE MODIFICA ---
-        if self.partita.get('possessori'):
-            possessori_table.setRowCount(len(self.partita['possessori']))
-            for i, possessore in enumerate(self.partita['possessori']):
-                possessori_table.setItem(i, 0, QTableWidgetItem(str(possessore.get('id', ''))))
-                possessori_table.setItem(i, 1, QTableWidgetItem(possessore.get('nome_completo', '')))
-                possessori_table.setItem(i, 2, QTableWidgetItem(possessore.get('titolo', '')))
-                possessori_table.setItem(i, 3, QTableWidgetItem(possessore.get('quota', '')))
+        if self.partita.possessori:
+            possessori_table.setRowCount(len(self.partita.possessori))
+            for i, possessore in enumerate(self.partita.possessori):
+                possessori_table.setItem(i, 0, QTableWidgetItem(str(getattr(possessore, 'id', ''))))
+                possessori_table.setItem(i, 1, QTableWidgetItem(getattr(possessore, 'nome_completo', '') or ''))
+                possessori_table.setItem(i, 2, QTableWidgetItem(getattr(possessore, 'titolo', '') or ''))
+                possessori_table.setItem(i, 3, QTableWidgetItem(getattr(possessore, 'quota', '') or ''))
         possessori_layout.addWidget(possessori_table)
         self.tabs.addTab(possessori_tab, "Possessori")
 
@@ -703,8 +703,8 @@ class PartitaDetailsDialog(QDialog):
         immobili_tab = QWidget()
         immobili_layout = QVBoxLayout(immobili_tab)
         immobili_table = ImmobiliTableWidget()
-        if self.partita.get('immobili'):
-            immobili_table.populate_data(self.partita['immobili'])
+        if self.partita.immobili:
+            immobili_table.populate_data(self.partita.immobili)
         immobili_layout.addWidget(immobili_table)
         self.tabs.addTab(immobili_tab, "Immobili")
 
@@ -722,40 +722,41 @@ class PartitaDetailsDialog(QDialog):
         variazioni_table.horizontalHeader().setStretchLastSection(True) # Per far espandere l'ultima colonna
         variazioni_table.setEditTriggers(QTableWidget.NoEditTriggers)
 
-        if self.partita.get('variazioni'):
-            variazioni_table.setRowCount(len(self.partita['variazioni']))
-            for i, var in enumerate(self.partita['variazioni']):
+        if self.partita.variazioni:
+            variazioni_table.setRowCount(len(self.partita.variazioni))
+            for i, var in enumerate(self.partita.variazioni):
                 col = 0
-                variazioni_table.setItem(i, col, QTableWidgetItem(str(var.get('id', '')))); col += 1
-                variazioni_table.setItem(i, col, QTableWidgetItem(var.get('tipo', ''))); col += 1
-                variazioni_table.setItem(i, col, QTableWidgetItem(str(var.get('data_variazione', '')))); col += 1
+                variazioni_table.setItem(i, col, QTableWidgetItem(str(getattr(var, 'id', '')))); col += 1
+                variazioni_table.setItem(i, col, QTableWidgetItem(getattr(var, 'tipo', '') or '')); col += 1
+                variazioni_table.setItem(i, col, QTableWidgetItem(str(getattr(var, 'data_variazione', '') or ''))); col += 1
 
                 # Informazioni Partita Origine
-                origine_text = ""
-                if var.get('partita_origine_id'): # Solo se l'ID esiste
-                    num_orig = var.get('origine_numero_partita', 'N/D')
-                    com_orig = var.get('origine_comune_nome', 'N/D')
+                if getattr(var, 'partita_origine_id', None):
+                    num_orig = getattr(var, 'partita_origine_numero', 'N/D') or 'N/D'
+                    com_orig = getattr(var, 'comune_origine', 'N/D') or 'N/D'
                     origine_text = f"N.{num_orig} ({com_orig})"
                 else:
-                    origine_text = "-" # O "N/A"
+                    origine_text = "-"
                 variazioni_table.setItem(i, col, QTableWidgetItem(origine_text)); col += 1
 
                 # Informazioni Partita Destinazione
-                dest_text = ""
-                if var.get('partita_destinazione_id'): # Solo se l'ID esiste
-                    num_dest = var.get('destinazione_numero_partita', 'N/D')
-                    com_dest = var.get('destinazione_comune_nome', 'N/D')
+                if getattr(var, 'partita_destinazione_id', None):
+                    num_dest = getattr(var, 'partita_destinazione_numero', 'N/D') or 'N/D'
+                    com_dest = getattr(var, 'comune_destinazione', 'N/D') or 'N/D'
                     dest_text = f"N.{num_dest} ({com_dest})"
                 else:
-                    dest_text = "-" # O "N/A"
+                    dest_text = "-"
                 variazioni_table.setItem(i, col, QTableWidgetItem(dest_text)); col += 1
 
-                # Contratto info (come prima)
-                contratto_text = ""
-                if var.get('tipo_contratto'):
-                    contratto_text = f"{var['tipo_contratto']} del {var.get('data_contratto', '')}"
-                    if var.get('notaio'):
-                        contratto_text += f" - {var['notaio']}"
+                # Contratto info
+                tipo_contratto = getattr(var, 'tipo_contratto', None)
+                if tipo_contratto:
+                    contratto_text = f"{tipo_contratto} del {getattr(var, 'data_contratto', '') or ''}"
+                    notaio = getattr(var, 'notaio', None)
+                    if notaio:
+                        contratto_text += f" - {notaio}"
+                else:
+                    contratto_text = ""
                 variazioni_table.setItem(i, col, QTableWidgetItem(contratto_text)); col += 1
 
         variazioni_layout.addWidget(variazioni_table)
@@ -828,37 +829,35 @@ class PartitaDetailsDialog(QDialog):
 
         # Carica i documenti e aggiorna la tabella dei documenti
         try:
-            documenti_list = self.db_manager.get_documenti_per_partita(self.partita['id'])
+            documenti_list = self.db_manager.get_documenti_per_partita(self.partita.id)
             self.documents_table.setRowCount(0) # Pulisci prima di popolare
 
             if documenti_list:
                 self.documents_table.setRowCount(len(documenti_list))
                 for row, doc_data in enumerate(documenti_list):
-                    self.documents_table.setItem(row, 0, QTableWidgetItem(str(doc_data.get('documento_id', ''))))
-                    self.documents_table.setItem(row, 1, QTableWidgetItem(doc_data.get('titolo', '')))
-                    self.documents_table.setItem(row, 2, QTableWidgetItem(doc_data.get('tipo_documento', '')))
-                    self.documents_table.setItem(row, 3, QTableWidgetItem(str(doc_data.get('anno', ''))))
-                    self.documents_table.setItem(row, 4, QTableWidgetItem(doc_data.get('rilevanza', '')))
+                    self.documents_table.setItem(row, 0, QTableWidgetItem(str(doc_data.id)))
+                    self.documents_table.setItem(row, 1, QTableWidgetItem(doc_data.titolo or ''))
+                    self.documents_table.setItem(row, 2, QTableWidgetItem(doc_data.tipo_documento or ''))
+                    self.documents_table.setItem(row, 3, QTableWidgetItem(str(doc_data.anno or '')))
+                    self.documents_table.setItem(row, 4, QTableWidgetItem(doc_data.rilevanza or ''))
                     
                     # Percorso, con un tooltip che mostra il percorso completo
-                    percorso_file_full = doc_data.get('percorso_file', 'N/D')
+                    percorso_file_full = doc_data.percorso_file or ''
                     path_item = QTableWidgetItem(os.path.basename(percorso_file_full) if percorso_file_full else "N/D")
                     path_item.setToolTip(percorso_file_full) # Il tooltip mostrerà il percorso completo
                     # Salva il percorso completo nell'UserRole per il pulsante "Apri"
-                    percorso_file_full = doc_data.get('percorso_file', '')
-                    path_item = QTableWidgetItem(os.path.basename(percorso_file_full) if percorso_file_full else "N/D")
                     path_item.setData(Qt.UserRole, percorso_file_full)  # Assicurati che questo sia sempre una stringa valida
                     self.documents_table.setItem(row, 5, path_item)
                 self.documents_table.resizeColumnsToContents()
             else:
-                self.logger.info(f"Nessun documento allegato per la partita ID {self.partita['id']}.")
+                self.logger.info(f"Nessun documento allegato per la partita ID {self.partita.id}.")
                 self.documents_table.setRowCount(1)
                 no_docs_item = QTableWidgetItem("Nessun documento allegato a questa partita.")
                 no_docs_item.setTextAlignment(Qt.AlignCenter)
                 self.documents_table.setItem(0, 0, no_docs_item)
                 self.documents_table.setSpan(0, 0, 1, self.documents_table.columnCount())
         except Exception as e:
-            self.logger.error(f"Errore durante il caricamento dei documenti per la partita {self.partita['id']}: {e}", exc_info=True)
+            self.logger.error(f"Errore durante il caricamento dei documenti per la partita {self.partita.id}: {e}", exc_info=True)
             QMessageBox.critical(self, "Errore Caricamento Documenti", f"Si è verificato un errore durante il caricamento dei documenti: {e}")
             self.documents_table.setRowCount(1)
             error_item = QTableWidgetItem("Errore nel caricamento dei documenti.")
@@ -876,7 +875,7 @@ class PartitaDetailsDialog(QDialog):
             QMessageBox.warning(self, "Errore Dati", "Nessun dato della partita da esportare.")
             return
 
-        partita_id = self.partita.get('id', 'sconosciuto')
+        partita_id = self.partita.id
         default_filename = f"dettaglio_partita_{partita_id}_{date.today().isoformat()}.txt"
 
         file_path, _ = QFileDialog.getSaveFileName(
@@ -909,8 +908,8 @@ class PartitaDetailsDialog(QDialog):
             QMessageBox.warning(self, "Errore Dati", "Nessun dato della partita da esportare.")
             return
 
-        partita_id = self.partita.get('id', 'sconosciuto')
-        pdf_report_title = f"Dettaglio Partita N.{self.partita.get('numero_partita', 'N/D')} - Comune: {self.partita.get('comune_nome', 'N/D')}"
+        partita_id = self.partita.id
+        pdf_report_title = f"Dettaglio Partita N.{self.partita.numero_partita} - Comune: {self.partita.comune_nome}"
         default_filename_prefix = f"dettaglio_partita_{partita_id}"
 
         # Genera un testo leggibile per l'anteprima e per il PDF
@@ -949,21 +948,21 @@ class PartitaDetailsDialog(QDialog):
         # --- SEZIONE 1: INTESTAZIONE E DATI GENERALI PARTITA ---
         report_lines.append("=" * 70)
         # Includi il suffisso nel titolo, se presente
-        numero_partita_display = f"N. {partita.get('numero_partita', 'N/D')}"
-        if partita.get('suffisso_partita'):
-            numero_partita_display += f" ({partita['suffisso_partita']})"
+        numero_partita_display = f"N. {getattr(partita, 'numero_partita', 'N/D')}"
+        if getattr(partita, 'suffisso_partita', None):
+            numero_partita_display += f" ({partita.suffisso_partita})"
 
         report_lines.append(f"DETTAGLIO PARTITA {numero_partita_display}")
-        report_lines.append(f"Comune: {partita.get('comune_nome', 'N/D')}")
-        report_lines.append(f"ID Partita: {partita.get('id', 'N/D')}")
+        report_lines.append(f"Comune: {getattr(partita, 'comune_nome', 'N/D')}")
+        report_lines.append(f"ID Partita: {getattr(partita, 'id', 'N/D')}")
         report_lines.append("=" * 70)
 
-        report_lines.append(f"Tipo Partita: {partita.get('tipo', 'N/D')}")
-        report_lines.append(f"Stato: {partita.get('stato', 'N/D')}")
-        report_lines.append(f"Data Impianto: {partita.get('data_impianto', 'N/D')}")
-        data_chiusura = partita.get('data_chiusura')
+        report_lines.append(f"Tipo Partita: {getattr(partita, 'tipo', 'N/D')}")
+        report_lines.append(f"Stato: {getattr(partita, 'stato', 'N/D')}")
+        report_lines.append(f"Data Impianto: {getattr(partita, 'data_impianto', 'N/D')}")
+        data_chiusura = getattr(partita, 'data_chiusura', None)
         report_lines.append(f"Data Chiusura: {data_chiusura if data_chiusura else 'N/A'}")
-        numero_provenienza = partita.get('numero_provenienza')
+        numero_provenienza = getattr(partita, 'numero_provenienza', None)
         report_lines.append(f"Numero Provenienza: {numero_provenienza if numero_provenienza else 'N/A'}")
         report_lines.append("\n") # Linea vuota per separazione
 
@@ -971,66 +970,70 @@ class PartitaDetailsDialog(QDialog):
         report_lines.append("=" * 70)
         report_lines.append("POSSESSORI ASSOCIATI")
         report_lines.append("=" * 70)
-        if partita.get('possessori'):
-            for i, poss in enumerate(partita['possessori']):
-                report_lines.append(f"  - Possessore {i+1} (ID: {poss.get('id', 'N/D')}): {poss.get('nome_completo', 'N/D')}")
-                report_lines.append(f"    Titolo di Possesso: {poss.get('titolo', 'N/A')}")
-                report_lines.append(f"    Quota: {poss.get('quota', 'N/A')}")
-                if i < len(partita['possessori']) - 1:
-                    report_lines.append("  " + "-" * 60) # Separatore tra possessori
+        possessori = getattr(partita, 'possessori', [])
+        if possessori:
+            for i, poss in enumerate(possessori):
+                report_lines.append(f"  - Possessore {i+1} (ID: {getattr(poss, 'id', 'N/D')}): {getattr(poss, 'nome_completo', 'N/D')}")
+                report_lines.append(f"    Titolo di Possesso: {getattr(poss, 'titolo', 'N/A')}")
+                report_lines.append(f"    Quota: {getattr(poss, 'quota', 'N/A')}")
+                if i < len(possessori) - 1:
+                    report_lines.append("  " + "-" * 60)
         else:
             report_lines.append("  Nessun possessore associato a questa partita.")
-        report_lines.append("\n") # Linea vuota per separazione
+        report_lines.append("\n")
 
         # --- SEZIONE 3: IMMOBILI ---
         report_lines.append("=" * 70)
         report_lines.append("IMMOBILI CENSITI")
         report_lines.append("=" * 70)
-        if partita.get('immobili'):
-            for i, imm in enumerate(partita['immobili']):
-                report_lines.append(f"  - Immobile {i+1} (ID: {imm.get('id', 'N/D')}): {imm.get('natura', 'N/D')}")
-                localita_info = f"{imm.get('localita_nome', '')}"
-                if imm.get('localita_tipo'):
-                    localita_info += f" ({imm.get('localita_tipo')})"
+        immobili = getattr(partita, 'immobili', [])
+        if immobili:
+            for i, imm in enumerate(immobili):
+                report_lines.append(f"  - Immobile {i+1} (ID: {getattr(imm, 'id', 'N/D')}): {getattr(imm, 'natura', 'N/D')}")
+                localita_nome = getattr(imm, 'localita_nome', '') or ''
+                localita_tipo = getattr(imm, 'localita_tipo', '') or getattr(imm, 'tipo_localita', '') or ''
+                localita_info = f"{localita_nome} ({localita_tipo})" if localita_nome and localita_tipo else localita_nome
                 report_lines.append(f"    Località: {localita_info.strip() if localita_info.strip() else 'N/A'}")
-                report_lines.append(f"    Classificazione: {imm.get('classificazione', 'N/A')}")
-                report_lines.append(f"    Consistenza: {imm.get('consistenza', 'N/A')}")
+                report_lines.append(f"    Classificazione: {getattr(imm, 'classificazione', 'N/A') or 'N/A'}")
+                report_lines.append(f"    Consistenza: {getattr(imm, 'consistenza', 'N/A') or 'N/A'}")
                 piani_vani_info = []
-                if imm.get('numero_piani') is not None and imm.get('numero_piani') > 0:
-                    piani_vani_info.append(f"Piani: {imm.get('numero_piani')}")
-                if imm.get('numero_vani') is not None and imm.get('numero_vani') > 0:
-                    piani_vani_info.append(f"Vani: {imm.get('numero_vani')}")
+                num_piani = getattr(imm, 'numero_piani', None)
+                num_vani = getattr(imm, 'numero_vani', None)
+                if num_piani is not None and num_piani:
+                    piani_vani_info.append(f"Piani: {num_piani}")
+                if num_vani is not None and num_vani:
+                    piani_vani_info.append(f"Vani: {num_vani}")
                 if piani_vani_info:
                     report_lines.append(f"    Dettagli: {' | '.join(piani_vani_info)}")
-                
-                if i < len(partita['immobili']) - 1:
-                    report_lines.append("  " + "-" * 60) # Separatore tra immobili
+                if i < len(immobili) - 1:
+                    report_lines.append("  " + "-" * 60)
         else:
             report_lines.append("  Nessun immobile associato a questa partita.")
-        report_lines.append("\n") # Linea vuota per separazione
+        report_lines.append("\n")
 
         # --- SEZIONE 4: VARIAZIONI ---
         report_lines.append("=" * 70)
         report_lines.append("VARIAZIONI STORICHE")
         report_lines.append("=" * 70)
-        if partita.get('variazioni'):
-            for i, var in enumerate(partita['variazioni']):
-                report_lines.append(f"  - Variazione {i+1} (ID: {var.get('id', 'N/D')}): {var.get('tipo', 'N/D')}")
-                report_lines.append(f"    Data Variazione: {var.get('data_variazione', 'N/D')}")
-                
+        variazioni = getattr(partita, 'variazioni', [])
+        if variazioni:
+            for i, var in enumerate(variazioni):
+                report_lines.append(f"  - Variazione {i+1} (ID: {getattr(var, 'id', 'N/D')}): {getattr(var, 'tipo', 'N/D')}")
+                report_lines.append(f"    Data Variazione: {getattr(var, 'data_variazione', 'N/D')}")
+
                 # Dettagli Partita Origine
-                orig_part_id = var.get('partita_origine_id')
-                orig_num = var.get('origine_numero_partita', 'N/D')
-                orig_com = var.get('origine_comune_nome', 'N/D')
+                orig_part_id = getattr(var, 'partita_origine_id', None)
+                orig_num = getattr(var, 'partita_origine_numero', 'N/D') or 'N/D'
+                orig_com = getattr(var, 'comune_origine', 'N/D') or 'N/D'
                 if orig_part_id:
                     report_lines.append(f"    Partita Origine: N.{orig_num} (Comune: {orig_com}) [ID: {orig_part_id}]")
                 else:
                     report_lines.append("    Partita Origine: N/A")
 
                 # Dettagli Partita Destinazione
-                dest_part_id = var.get('partita_destinazione_id')
-                dest_num = var.get('destinazione_numero_partita', 'N/D')
-                dest_com = var.get('destinazione_comune_nome', 'N/D')
+                dest_part_id = getattr(var, 'partita_destinazione_id', None)
+                dest_num = getattr(var, 'partita_destinazione_numero', 'N/D') or 'N/D'
+                dest_com = getattr(var, 'comune_destinazione', 'N/D') or 'N/D'
                 if dest_part_id:
                     report_lines.append(f"    Partita Destinazione: N.{dest_num} (Comune: {dest_com}) [ID: {dest_part_id}]")
                 else:
@@ -1038,18 +1041,15 @@ class PartitaDetailsDialog(QDialog):
 
                 # Dettagli Contratto
                 contr_info_parts = []
-                if var.get('tipo_contratto'): contr_info_parts.append(f"Tipo: {var.get('tipo_contratto')}")
-                if var.get('data_contratto'): contr_info_parts.append(f"Data: {var.get('data_contratto')}")
-                if var.get('notaio'): contr_info_parts.append(f"Notaio: {var.get('notaio')}")
-                if var.get('repertorio'): contr_info_parts.append(f"Repertorio: {var.get('repertorio')}")
+                if getattr(var, 'tipo_contratto', None): contr_info_parts.append(f"Tipo: {var.tipo_contratto}")
+                if getattr(var, 'data_contratto', None): contr_info_parts.append(f"Data: {var.data_contratto}")
+                if getattr(var, 'notaio', None): contr_info_parts.append(f"Notaio: {var.notaio}")
+                if getattr(var, 'repertorio', None): contr_info_parts.append(f"Repertorio: {var.repertorio}")
                 if contr_info_parts:
                     report_lines.append(f"    Contratto: {' | '.join(contr_info_parts)}")
-                
-                if var.get('note_variazione') : report_lines.append(f"    Note Variazione: {var.get('note_variazione')}") # Se c'è una colonna note per la variazione
-                if var.get('contratto_note') : report_lines.append(f"    Note Contratto: {var.get('contratto_note')}") # Se c'è una colonna note nel contratto
 
-                if i < len(partita['variazioni']) - 1:
-                    report_lines.append("  " + "-" * 60) # Separatore tra variazioni
+                if i < len(variazioni) - 1:
+                    report_lines.append("  " + "-" * 60)
         else:
             report_lines.append("  Nessuna variazione registrata per questa partita.")
         report_lines.append("\n") # Linea vuota per separazione
@@ -1365,9 +1365,9 @@ class ModificaPartitaDialog(QDialog):
             return
 
         # 1. Popola il titolo principale
-        suffisso_db = self.partita_data_originale.get('suffisso_partita')
-        suffisso_display = f" ({suffisso_db})" if suffisso_db and str(suffisso_db).strip() else ""
-        titolo_text = f"<h2>Partita N.{self.partita_data_originale.get('numero_partita', 'N/D')}{suffisso_display} - {self.partita_data_originale.get('comune_nome', 'N/D')}</h2>"
+        suffisso_db = self.partita_data_originale.suffisso_partita
+        suffisso_display = f" ({suffisso_db.strip()})" if suffisso_db and suffisso_db.strip() else ""
+        titolo_text = f"<h2>Partita N.{self.partita_data_originale.numero_partita}{suffisso_display} - {self.partita_data_originale.comune_nome}</h2>"
         self.title_label.setText(titolo_text)
         
         # 2. Popola tutti i tab
@@ -1384,19 +1384,19 @@ class ModificaPartitaDialog(QDialog):
         partita = self.partita_data_originale
         if not partita: return
 
-        self.numero_partita_spinbox.setValue(partita.get('numero_partita', 0))
-        self.suffisso_partita_edit.setText(partita.get('suffisso_partita', '') or '')
+        self.numero_partita_spinbox.setValue(partita.numero_partita or 0)
+        self.suffisso_partita_edit.setText(partita.suffisso_partita or '')
 
-        tipo_idx = self.tipo_combo.findText(partita.get('tipo', ''), Qt.MatchFixedString)
+        tipo_idx = self.tipo_combo.findText(partita.tipo or '', Qt.MatchFixedString)
         if tipo_idx >= 0: self.tipo_combo.setCurrentIndex(tipo_idx)
 
-        stato_idx = self.stato_combo.findText(partita.get('stato', ''), Qt.MatchFixedString)
+        stato_idx = self.stato_combo.findText(partita.stato or '', Qt.MatchFixedString)
         if stato_idx >= 0: self.stato_combo.setCurrentIndex(stato_idx)
 
-        self.data_impianto_edit.setDate(datetime_to_qdate(partita.get('data_impianto')))
+        self.data_impianto_edit.setDate(datetime_to_qdate(partita.data_impianto))
 
         # Logica aggiornata per data_chiusura
-        data_chiusura_db = partita.get('data_chiusura')
+        data_chiusura_db = partita.data_chiusura
         if data_chiusura_db:
             self.data_chiusura_check.setChecked(True)
             self.data_chiusura_edit.setDate(datetime_to_qdate(data_chiusura_db))
@@ -1404,7 +1404,7 @@ class ModificaPartitaDialog(QDialog):
             self.data_chiusura_check.setChecked(False)
             
         # Logica aggiornata per numero_provenienza
-        num_prov_val = partita.get('numero_provenienza')
+        num_prov_val = partita.numero_provenienza
         self.numero_provenienza_edit.setText(str(num_prov_val) if num_prov_val is not None else "")
 
         self.logger.debug("Tab 'Dati Generali' popolato con la nuova logica.")
@@ -1455,21 +1455,17 @@ class ModificaPartitaDialog(QDialog):
         self.logger.info(f"Caricamento immobili associati per partita ID: {self.partita_id}")
 
         try:
-            immobili = self.partita_data_originale.get('immobili', []) # Dati immobili sono già in partita_data_originale
+            immobili = self.partita_data_originale.immobili # Dati immobili sono già in partita_data_originale
             if immobili:
                 self.immobili_table.setRowCount(len(immobili))
                 for row_idx, imm in enumerate(immobili):
-                    # La logica di ImmobiliTableWidget.populate_data è replicata qui per coerenza
-                    # ma potresti anche passare i dati a immobili_table.populate_data() se è un widget riusabile
-                    self.immobili_table.setItem(row_idx, 0, QTableWidgetItem(str(imm.get('id', ''))))
-                    self.immobili_table.setItem(row_idx, 1, QTableWidgetItem(imm.get('natura', '')))
-                    self.immobili_table.setItem(row_idx, 2, QTableWidgetItem(imm.get('classificazione', '')))
-                    self.immobili_table.setItem(row_idx, 3, QTableWidgetItem(imm.get('consistenza', '')))
-                    localita_text = ""
-                    if 'localita_nome' in imm:
-                        localita_text = imm['localita_nome']
-                        if 'localita_tipo' in imm:
-                            localita_text += f" ({imm['localita_tipo']})"
+                    self.immobili_table.setItem(row_idx, 0, QTableWidgetItem(str(getattr(imm, 'id', ''))))
+                    self.immobili_table.setItem(row_idx, 1, QTableWidgetItem(getattr(imm, 'natura', '') or ''))
+                    self.immobili_table.setItem(row_idx, 2, QTableWidgetItem(getattr(imm, 'classificazione', '') or ''))
+                    self.immobili_table.setItem(row_idx, 3, QTableWidgetItem(getattr(imm, 'consistenza', '') or ''))
+                    localita_nome = getattr(imm, 'localita_nome', '') or ''
+                    localita_tipo = getattr(imm, 'localita_tipo', '') or getattr(imm, 'tipo_localita', '') or ''
+                    localita_text = f"{localita_nome} ({localita_tipo})" if localita_nome and localita_tipo else localita_nome
                     self.immobili_table.setItem(row_idx, 4, QTableWidgetItem(localita_text))
                 self.immobili_table.resizeColumnsToContents()
             else:
@@ -1495,45 +1491,42 @@ class ModificaPartitaDialog(QDialog):
         self.logger.info(f"Caricamento variazioni associate per partita ID: {self.partita_id}")
 
         try:
-            variazioni = self.partita_data_originale.get('variazioni', []) # Dati variazioni sono già in partita_data_originale
+            variazioni = self.partita_data_originale.variazioni # Dati variazioni sono già in partita_data_originale
             if variazioni:
                 self.variazioni_table.setRowCount(len(variazioni))
                 for row_idx, var in enumerate(variazioni):
                     col = 0
-                    self.variazioni_table.setItem(row_idx, col, QTableWidgetItem(str(var.get('id', '')))); col += 1
-                    self.variazioni_table.setItem(row_idx, col, QTableWidgetItem(var.get('tipo', ''))); col += 1
-                    self.variazioni_table.setItem(row_idx, col, QTableWidgetItem(str(var.get('data_variazione', '')))); col += 1
+                    self.variazioni_table.setItem(row_idx, col, QTableWidgetItem(str(getattr(var, 'id', '')))); col += 1
+                    self.variazioni_table.setItem(row_idx, col, QTableWidgetItem(getattr(var, 'tipo', '') or '')); col += 1
+                    self.variazioni_table.setItem(row_idx, col, QTableWidgetItem(str(getattr(var, 'data_variazione', '') or ''))); col += 1
 
                     # Partita Origine
-                    orig_text = ""
-                    if var.get('partita_origine_id'):
-                        num_orig = var.get('origine_numero_partita', 'N/D')
-                        com_orig = var.get('origine_comune_nome', 'N/D')
+                    if getattr(var, 'partita_origine_id', None):
+                        num_orig = getattr(var, 'partita_origine_numero', 'N/D') or 'N/D'
+                        com_orig = getattr(var, 'comune_origine', 'N/D') or 'N/D'
                         orig_text = f"N.{num_orig} ({com_orig})"
-                        if var.get('origine_suffisso_partita'): # Se hai il suffisso nella variazione
-                            orig_text += f" ({var.get('origine_suffisso_partita')})"
                     else:
                         orig_text = "-"
                     self.variazioni_table.setItem(row_idx, col, QTableWidgetItem(orig_text)); col += 1
 
                     # Partita Destinazione
-                    dest_text = ""
-                    if var.get('partita_destinazione_id'):
-                        num_dest = var.get('destinazione_numero_partita', 'N/D')
-                        com_dest = var.get('destinazione_comune_nome', 'N/D')
+                    if getattr(var, 'partita_destinazione_id', None):
+                        num_dest = getattr(var, 'partita_destinazione_numero', 'N/D') or 'N/D'
+                        com_dest = getattr(var, 'comune_destinazione', 'N/D') or 'N/D'
                         dest_text = f"N.{num_dest} ({com_dest})"
-                        if var.get('destinazione_suffisso_partita'): # Se hai il suffisso nella variazione
-                            dest_text += f" ({var.get('destinazione_suffisso_partita')})"
                     else:
                         dest_text = "-"
                     self.variazioni_table.setItem(row_idx, col, QTableWidgetItem(dest_text)); col += 1
 
                     # Contratto
-                    contratto_text = ""
-                    if var.get('tipo_contratto'):
-                        contratto_text = f"{var['tipo_contratto']} del {var.get('data_contratto', '')}"
-                        if var.get('notaio'):
-                            contratto_text += f" - {var['notaio']}"
+                    tipo_contratto = getattr(var, 'tipo_contratto', None)
+                    if tipo_contratto:
+                        contratto_text = f"{tipo_contratto} del {getattr(var, 'data_contratto', '') or ''}"
+                        notaio = getattr(var, 'notaio', None)
+                        if notaio:
+                            contratto_text += f" - {notaio}"
+                    else:
+                        contratto_text = ""
                     self.variazioni_table.setItem(row_idx, col, QTableWidgetItem(contratto_text)); col += 1
 
                 self.variazioni_table.resizeColumnsToContents()
@@ -1589,7 +1582,7 @@ class ModificaPartitaDialog(QDialog):
         
         # Validazione: verifica che la nuova partita non esista già
         # Dobbiamo usare il comune_id della partita corrente
-        comune_id_corrente = self.partita_data_originale.get('comune_id')
+        comune_id_corrente = self.partita_data_originale.comune_id
         if comune_id_corrente:
             existing = self.db_manager.search_partite(
                 comune_id=comune_id_corrente,
@@ -1628,32 +1621,32 @@ class ModificaPartitaDialog(QDialog):
             if documenti:
                 self.documents_table.setRowCount(len(documenti))
                 for row, doc in enumerate(documenti):
-                    documento_id_storico = doc.get("documento_id")
+                    documento_id_storico = doc.id
                     
                     # --- INIZIO CORREZIONE: Salvataggio dati robusto ---
             # Salviamo un dizionario con gli ID di relazione nell'UserRole
                     rel_data = {
-                        'doc_id': doc.get('rel_documento_id'),
-                        'partita_id': doc.get('rel_partita_id')
+                        'doc_id': doc.rel_documento_id,
+                        'partita_id': doc.rel_partita_id
                     }
 
                     # L'item nella prima colonna conterrà tutti i dati per la riga
-                    item_doc_id = QTableWidgetItem(str(doc.get('documento_id', '')))
+                    item_doc_id = QTableWidgetItem(str(doc.id))
                     item_doc_id.setData(Qt.UserRole, rel_data)
                     self.documents_table.setItem(row, 0, item_doc_id)
             # --- FINE CORREZIONE ---
                     # Salviamo l'ID del documento storico e l'ID della partita per la rimozione del legame
-                    item_doc_id.setData(Qt.UserRole + 1, doc.get("dp_documento_id")) # ID del documento storico nella relazione
-                    item_doc_id.setData(Qt.UserRole + 2, doc.get("dp_partita_id")) # ID della partita nella relazione (che è self.partita_id)
+                    item_doc_id.setData(Qt.UserRole + 1, doc.rel_documento_id) # ID del documento storico nella relazione
+                    item_doc_id.setData(Qt.UserRole + 2, doc.rel_partita_id) # ID della partita nella relazione (che è self.partita_id)
                     
                     
-                    self.documents_table.setItem(row, 1, QTableWidgetItem(doc.get("titolo") or ''))
-                    self.documents_table.setItem(row, 2, QTableWidgetItem(doc.get("tipo_documento") or ''))
-                    self.documents_table.setItem(row, 3, QTableWidgetItem(str(doc.get("anno", '')) or ''))
-                    self.documents_table.setItem(row, 4, QTableWidgetItem(doc.get("rilevanza") or ''))
+                    self.documents_table.setItem(row, 1, QTableWidgetItem(doc.titolo or ''))
+                    self.documents_table.setItem(row, 2, QTableWidgetItem(doc.tipo_documento or ''))
+                    self.documents_table.setItem(row, 3, QTableWidgetItem(str(doc.anno or '')))
+                    self.documents_table.setItem(row, 4, QTableWidgetItem(doc.rilevanza or ''))
                     
                     # CORREZIONE: Assicurati che il percorso sia salvato correttamente nell'UserRole
-                    percorso_file_full = doc.get("percorso_file") or ''
+                    percorso_file_full = doc.percorso_file or ''
                     path_item = QTableWidgetItem(os.path.basename(percorso_file_full) if percorso_file_full else "N/D")
                     path_item.setData(Qt.UserRole, percorso_file_full) # Salva percorso completo per l'apertura
                     self.documents_table.setItem(row, 5, path_item)
@@ -1714,7 +1707,7 @@ class ModificaPartitaDialog(QDialog):
     # -- Possessori --
     def _aggiungi_possessore_a_partita(self):
         self.logger.debug(f"Richiesta aggiunta possessore per partita ID {self.partita_id}")
-        comune_id_partita = self.partita_data_originale.get('comune_id')
+        comune_id_partita = self.partita_data_originale.comune_id
         if comune_id_partita is None:
             QMessageBox.warning(self, "Errore", "Comune della partita non determinato. Impossibile aggiungere possessore.")
             return
@@ -1725,14 +1718,14 @@ class ModificaPartitaDialog(QDialog):
 
         if possessore_dialog.exec_() == QDialog.Accepted:
             if hasattr(possessore_dialog, 'selected_possessore') and possessore_dialog.selected_possessore:
-                selected_possessore_id = possessore_dialog.selected_possessore.get('id')
-                selected_possessore_nome = possessore_dialog.selected_possessore.get('nome_completo')
+                selected_possessore_id = possessore_dialog.selected_possessore.id
+                selected_possessore_nome = possessore_dialog.selected_possessore.nome_completo
         if not selected_possessore_id or not selected_possessore_nome:
             self.logger.info("Nessun possessore selezionato o creato.")
             return
 
         self.logger.info(f"Possessore selezionato/creato: ID {selected_possessore_id}, Nome: {selected_possessore_nome}")
-        tipo_partita_corrente = self.partita_data_originale.get('tipo', 'principale')
+        tipo_partita_corrente = self.partita_data_originale.tipo or 'principale'
         dettagli_legame = DettagliLegamePossessoreDialog.get_details_for_new_legame(selected_possessore_nome, tipo_partita_corrente, db_manager=self.db_manager, parent=self)
 
         if not dettagli_legame:
@@ -1779,7 +1772,7 @@ class ModificaPartitaDialog(QDialog):
         quota_attuale = quota_attuale_item.text() if quota_attuale_item and quota_attuale_item.text() != 'N/D' else None
 
         self.logger.debug(f"Richiesta modifica legame per relazione ID {id_relazione_pp} (Possessore: {nome_possessore_attuale})")
-        tipo_partita_corrente = self.partita_data_originale.get('tipo', 'principale')
+        tipo_partita_corrente = self.partita_data_originale.tipo or 'principale'
         nuovi_dettagli_legame = DettagliLegamePossessoreDialog.get_details_for_edit_legame(
             nome_possessore_attuale, tipo_partita_corrente, titolo_attuale, quota_attuale,
             db_manager=self.db_manager, parent=self
@@ -1851,7 +1844,7 @@ class ModificaPartitaDialog(QDialog):
     # -- Immobili --
     def _aggiungi_immobile_a_partita(self):
         self.logger.debug(f"Richiesta aggiunta immobile per partita ID {self.partita_id}")
-        comune_id_partita = self.partita_data_originale.get('comune_id')
+        comune_id_partita = getattr(self.partita_data_originale, 'comune_id', None)
         if comune_id_partita is None:
             QMessageBox.warning(self, "Errore", "Comune della partita non determinato. Impossibile aggiungere immobile.")
             return
@@ -1905,13 +1898,9 @@ class ModificaPartitaDialog(QDialog):
         # Per semplicità, qui useremo una versione adattata di ImmobileDialog o un nuovo dialogo.
         # Creiamo un nuovo dialogo o adattiamo quello esistente (che forse non è l'ideale).
         
-        # Idealmente, avresti un ModificaImmobileDialog(db_manager, immobile_id, comune_id_partita, parent)
-        # Per ora, si assume che sia un dialogo che possa essere pre-popolato e salvare.
-        
-        # Se non esiste una ModificaImmobileDialog, questo non funzionerà.
-        # Per semplicità, ipotizziamo una classe ad-hoc o un'estensione.
-        # Assicurati che sia importata o creata
-        dialog = ModificaImmobileDialog(self.db_manager, immobile_id, self.partita_id, self) # Passa immobile_id, partita_id
+        # Recupera il comune_id dalla partita (non usare partita_id come comune_id!)
+        comune_id_partita = getattr(self.partita_data_originale, 'comune_id', None)
+        dialog = ModificaImmobileDialog(self.db_manager, immobile_id, comune_id_partita, self)
         
         if dialog.exec_() == QDialog.Accepted:
             QMessageBox.information(self, "Successo", "Immobile modificato con successo.")
@@ -2550,20 +2539,18 @@ class ModificaPossessoreDialog(QDialog):
             return
 
         self.nome_completo_edit.setText(
-            self.possessore_data_originale.get('nome_completo', ''))
-        self.cognome_nome_edit.setText(self.possessore_data_originale.get(
-            'cognome_nome', ''))
+            self.possessore_data_originale.nome_completo or '')
+        self.cognome_nome_edit.setText(self.possessore_data_originale.cognome_nome or '')
         self.paternita_edit.setText(
-            self.possessore_data_originale.get('paternita', ''))
+            self.possessore_data_originale.paternita or '')
         self.attivo_checkbox.setChecked(
-            self.possessore_data_originale.get('attivo', True))
+            self.possessore_data_originale.attivo if self.possessore_data_originale.attivo is not None else True)
 
-        self.selected_comune_ref_id = self.possessore_data_originale.get(
-            'comune_riferimento_id')  # Salva l'ID
-        nome_comune_ref = self.possessore_data_originale.get(
-            'comune_riferimento_nome', "Nessun comune assegnato")
+        self.selected_comune_ref_id = self.possessore_data_originale.comune_id
+        nome_comune_ref = getattr(self.possessore_data_originale, 'comune_riferimento_nome', getattr(self.possessore_data_originale, 'comune_nome', 'N/D')) or 'N/D'
         self.comune_ref_label.setText(
-            f"{nome_comune_ref} (ID: {self.selected_comune_ref_id or 'N/A'})")
+            f"Comune: {nome_comune_ref} (ID: {self.selected_comune_ref_id})"
+        )
 
     def _cambia_comune_riferimento(self):
         # Usa ComuneSelectionDialog per cambiare il comune di riferimento
@@ -2754,7 +2741,7 @@ class ModificaComuneDialog(QDialog):
 
         # Ora carichiamo i dati specifici del comune da modificare
         all_comuni = self.db_manager.get_all_comuni_details()
-        found_comune = next((c for c in all_comuni if c.get('id') == self.comune_id), None)
+        found_comune = next((c for c in all_comuni if c.id == self.comune_id), None)
         
         if not found_comune:
             QMessageBox.critical(self, "Errore Caricamento", f"Impossibile caricare dati per Comune ID: {self.comune_id}.")
@@ -2764,14 +2751,14 @@ class ModificaComuneDialog(QDialog):
         self.comune_data_originale = found_comune
         
         # Popoliamo i campi della UI con i dati caricati
-        self.nome_edit.setText(self.comune_data_originale.get('nome_comune', ''))
-        self.provincia_edit.setText(self.comune_data_originale.get('provincia', ''))
-        self.regione_edit.setText(self.comune_data_originale.get('regione', ''))
-        self.codice_catastale_edit.setText(self.comune_data_originale.get('codice_catastale', ''))
-        self.note_edit.setText(self.comune_data_originale.get('note', ''))
+        self.nome_edit.setText(self.comune_data_originale.nome_comune or '')
+        self.provincia_edit.setText(self.comune_data_originale.provincia or '')
+        self.regione_edit.setText(self.comune_data_originale.regione or '')
+        self.codice_catastale_edit.setText(self.comune_data_originale.codice_catastale or '')
+        self.note_edit.setText(self.comune_data_originale.note or '')
 
         # --- MODIFICA CHIAVE: Selezioniamo il periodo corretto nel ComboBox ---
-        periodo_id_attuale = self.comune_data_originale.get('periodo_id')
+        periodo_id_attuale = self.comune_data_originale.periodo_id
         if periodo_id_attuale is not None:
             index = self.periodo_combo.findData(periodo_id_attuale)
             if index != -1:
@@ -2781,8 +2768,8 @@ class ModificaComuneDialog(QDialog):
         # --- FINE MODIFICA ---
 
         # Gestione date
-        di_str = self.comune_data_originale.get('data_istituzione'); self.data_istituzione_edit.setDate(QDate.fromString(str(di_str), "yyyy-MM-dd") if di_str else QDate())
-        ds_str = self.comune_data_originale.get('data_soppressione'); self.data_soppressione_edit.setDate(QDate.fromString(str(ds_str), "yyyy-MM-dd") if ds_str else QDate())
+        di_str = self.comune_data_originale.data_istituzione; self.data_istituzione_edit.setDate(QDate.fromString(str(di_str), "yyyy-MM-dd") if di_str else QDate())
+        ds_str = self.comune_data_originale.data_soppressione; self.data_soppressione_edit.setDate(QDate.fromString(str(ds_str), "yyyy-MM-dd") if ds_str else QDate())
 
     def _save_changes(self):
         # --- MODIFICA CHIAVE: Lettura dati dal ComboBox ---
@@ -2998,18 +2985,18 @@ class PossessoriComuneDialog(QDialog):
                 for row_idx, possessore in enumerate(possessori_list):
                     col = 0
                     self.possessori_table.setItem(
-                        row_idx, col, QTableWidgetItem(str(possessore.get('id', ''))))
+                        row_idx, col, QTableWidgetItem(str(getattr(possessore, 'id', ''))))
                     col += 1
                     self.possessori_table.setItem(row_idx, col, QTableWidgetItem(
-                        possessore.get('nome_completo', '')))
+                        getattr(possessore, 'nome_completo', '') or ''))
                     col += 1
                     self.possessori_table.setItem(
-                        row_idx, col, QTableWidgetItem(possessore.get('cognome_nome', '')))
+                        row_idx, col, QTableWidgetItem(getattr(possessore, 'cognome_nome', '') or ''))
                     col += 1
                     self.possessori_table.setItem(
-                        row_idx, col, QTableWidgetItem(possessore.get('paternita', '')))
+                        row_idx, col, QTableWidgetItem(getattr(possessore, 'paternita', '') or ''))
                     col += 1
-                    stato_str = "Attivo" if possessore.get('attivo', False) else "Non Attivo"
+                    stato_str = "Attivo" if getattr(possessore, 'attivo', False) else "Non Attivo"
                     self.possessori_table.setItem(
                         row_idx, col, QTableWidgetItem(stato_str))
                     col += 1
@@ -3126,18 +3113,18 @@ class PartiteComuneDialog(QDialog):
                 self.partite_table.setRowCount(len(partite_list))
                 for row_idx, partita in enumerate(partite_list):
                     col = 0
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('id', '')))); col += 1
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('numero_partita', '')))); col += 1
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('suffisso_partita', '') or '')); col += 1 
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('tipo', ''))); col += 1
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('stato', ''))); col += 1
-                    data_imp = partita.get('data_impianto')
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.id))); col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.numero_partita))); col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.suffisso_partita or '')); col += 1 
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.tipo or '')); col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.stato or '')); col += 1
+                    data_imp = partita.data_impianto
                     self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(data_imp) if data_imp else '')); col += 1
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('num_possessori', '0')))); col += 1
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('num_immobili', '0')))); col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.num_possessori or '0'))); col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.num_immobili or '0'))); col += 1
                     
                     # --- NUOVA RIGA PER IL NUMERO DEI DOCUMENTI ---
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('num_documenti_allegati', '0')))); col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.num_documenti_allegati or '0'))); col += 1
 
                 self.partite_table.resizeColumnsToContents()
             else:
@@ -3293,11 +3280,11 @@ class ModificaLocalitaDialog(QDialog):
             self.reject()
             return
 
-        self.nome_edit.setText(self.localita_data_originale.get('nome', ''))
-        self.comune_display_label.setText(f"{self.localita_data_originale.get('comune_nome', 'N/D')} (ID: {self.comune_id_parent})")
+        self.nome_edit.setText(self.localita_data_originale.nome or '')
+        self.comune_display_label.setText(f"{self.localita_data_originale.comune_nome or 'N/D'} (ID: {self.comune_id_parent})")
 
         # --- MODIFICA CHIAVE QUI: Seleziona l'item nel ComboBox basandosi sull'ID ---
-        tipo_id_attuale = self.localita_data_originale.get('tipo_id')
+        tipo_id_attuale = self.localita_data_originale.tipo_id
         if tipo_id_attuale is not None:
             index = self.tipo_combo.findData(tipo_id_attuale)
             if index >= 0:
@@ -3593,11 +3580,11 @@ class LocalitaSelectionDialog(QDialog):
                     self.localita_table.setRowCount(len(localita_results))
                     for i, loc in enumerate(localita_results):
                         self.localita_table.setItem(
-                            i, 0, QTableWidgetItem(str(loc.get('id', ''))))
+                            i, 0, QTableWidgetItem(str(loc.id or '')))
                         self.localita_table.setItem(
-                            i, 1, QTableWidgetItem(loc.get('nome', '')))
+                            i, 1, QTableWidgetItem(loc.nome or ''))
                         self.localita_table.setItem(
-                            i, 2, QTableWidgetItem(loc.get('tipo', '')))
+                            i, 2, QTableWidgetItem(loc.tipo or ''))
                     self.localita_table.resizeColumnsToContents()
                 else:
                     self.logger.info(f"Nessuna località trovata per comune ID {self.comune_id} con filtro '{actual_filter_text}'.")
@@ -3934,7 +3921,7 @@ class ModificaImmobileDialog(QDialog):
         try:
             localita_list = self.db_manager.get_localita_by_comune(self.comune_id_partita)
             for loc in localita_list:
-                self.localita_combo.addItem(loc['nome'], userData=loc['id'])
+                self.localita_combo.addItem(loc.nome, userData=loc.id)
         except Exception as e:
             self.logger.error(f"Errore nel caricamento delle località: {e}", exc_info=True)
             self.localita_combo.addItem("Errore caricamento", -1)
@@ -3953,17 +3940,18 @@ class ModificaImmobileDialog(QDialog):
                 return
 
             # Popola i campi
-            self.natura_combo.setCurrentText(self.dati_originali.get('natura', ''))
-            self.classificazione_edit.setText(self.dati_originali.get('classificazione', ''))
-            self.indirizzo_edit.setText(self.dati_originali.get('indirizzo', ''))
-            self.foglio_edit.setText(str(self.dati_originali.get('foglio', '')))
-            self.mappale_edit.setText(str(self.dati_originali.get('mappale', '')))
-            self.subalterno_edit.setText(str(self.dati_originali.get('subalterno', '')))
-            self.vani_spinbox.setValue(float(self.dati_originali.get('vani_o_superficie', 0.0)))
-            self.note_edit.setPlainText(self.dati_originali.get('note', ''))
+            self.natura_combo.setCurrentText(self.dati_originali.natura or '')
+            self.classificazione_edit.setText(self.dati_originali.classificazione or '')
+            self.indirizzo_edit.setText(getattr(self.dati_originali, 'indirizzo', ''))
+            self.foglio_edit.setText(str(getattr(self.dati_originali, 'foglio', '')))
+            self.mappale_edit.setText(str(getattr(self.dati_originali, 'mappale', '')))
+            self.subalterno_edit.setText(str(getattr(self.dati_originali, 'subalterno', '')))
+            # Mappa vani_o_superficie a numero_vani
+            self.vani_spinbox.setValue(float(self.dati_originali.numero_vani or 0.0))
+            self.note_edit.setPlainText(getattr(self.dati_originali, 'note', ''))
             
             # Seleziona la località corretta nel ComboBox
-            id_localita_originale = self.dati_originali.get('id_localita')
+            id_localita_originale = self.dati_originali.localita_id
             if id_localita_originale:
                 index = self.localita_combo.findData(id_localita_originale)
                 if index != -1:
@@ -3998,7 +3986,7 @@ class ModificaImmobileDialog(QDialog):
 
         # 3. Chiamata al DB Manager per l'aggiornamento
         try:
-            successo = self.db_manager.update_immobile(self.immobile_id, dati_aggiornati)
+            successo = self.db_manager.update_immobile(self.immobile_id, **dati_aggiornati)
             if successo:
                 QMessageBox.information(self, "Successo", "Immobile aggiornato con successo.")
                 return True # L'operazione è andata a buon fine
@@ -4117,11 +4105,11 @@ class PossessoreSelectionDialog(QDialog):
 
             self.possessori_table.setRowCount(len(possessori_list))
             for row, pos_data in enumerate(possessori_list):
-                self.possessori_table.setItem(row, 0, QTableWidgetItem(str(pos_data.get('id', ''))))
-                self.possessori_table.setItem(row, 1, QTableWidgetItem(pos_data.get('nome_completo', '')))
-                self.possessori_table.setItem(row, 2, QTableWidgetItem(pos_data.get('paternita', '')))
-                self.possessori_table.setItem(row, 3, QTableWidgetItem(pos_data.get('comune_riferimento_nome', '')))
-                self.possessori_table.setItem(row, 4, QTableWidgetItem("Attivo" if pos_data.get('attivo', False) else "Non Attivo"))
+                self.possessori_table.setItem(row, 0, QTableWidgetItem(str(getattr(pos_data, 'id', ''))))
+                self.possessori_table.setItem(row, 1, QTableWidgetItem(getattr(pos_data, 'nome_completo', '')))
+                self.possessori_table.setItem(row, 2, QTableWidgetItem(getattr(pos_data, 'paternita', '') or ''))
+                self.possessori_table.setItem(row, 3, QTableWidgetItem(getattr(pos_data, 'comune_riferimento_nome', '') or ''))
+                self.possessori_table.setItem(row, 4, QTableWidgetItem("Attivo" if getattr(pos_data, 'attivo', False) else "Non Attivo"))
             self.possessori_table.resizeColumnsToContents()
         except DBMError as e:
             QMessageBox.critical(self, "Errore", f"Impossibile caricare i possessori: {e}")
@@ -4397,10 +4385,10 @@ class ComuneSelectionDialog(QDialog):
             if comuni:
                 for comune in comuni:
                     item = QListWidgetItem(
-                        f"{comune['nome']} (ID: {comune['id']}, {comune['provincia']})")
-                    item.setData(Qt.UserRole, comune['id'])
+                        f"{comune.nome_comune} (ID: {comune.id}, {comune.provincia})")
+                    item.setData(Qt.UserRole, comune.id)
                     # Per recuperare il nome facilmente
-                    item.setData(Qt.UserRole + 1, comune['nome'])
+                    item.setData(Qt.UserRole + 1, comune.nome_comune)
                     self.comuni_list.addItem(item)
             else:
                 self.comuni_list.addItem("Nessun comune trovato.")
@@ -4523,13 +4511,12 @@ class PartitaSearchDialog(QDialog):
             row_pos = self.results_table.rowCount()
             self.results_table.insertRow(row_pos)
             col = 0
-            self.results_table.setItem(row_pos, col, QTableWidgetItem(str(partita.get('id', '')))); col += 1
-            self.results_table.setItem(row_pos, col, QTableWidgetItem(partita.get('comune_nome', ''))); col += 1
-            self.results_table.setItem(row_pos, col, QTableWidgetItem(str(partita.get('numero_partita', '')))); col += 1
-            # --- POPOLAMENTO COLONNA SUFFISSO ---
-            self.results_table.setItem(row_pos, col, QTableWidgetItem(partita.get('suffisso_partita', ''))); col += 1
-            self.results_table.setItem(row_pos, col, QTableWidgetItem(partita.get('tipo', ''))); col += 1
-            self.results_table.setItem(row_pos, col, QTableWidgetItem(partita.get('stato', ''))); col += 1
+            self.results_table.setItem(row_pos, col, QTableWidgetItem(str(getattr(partita, 'id', '')))); col += 1
+            self.results_table.setItem(row_pos, col, QTableWidgetItem(getattr(partita, 'comune_nome', '') or '')); col += 1
+            self.results_table.setItem(row_pos, col, QTableWidgetItem(str(getattr(partita, 'numero_partita', '')))); col += 1
+            self.results_table.setItem(row_pos, col, QTableWidgetItem(getattr(partita, 'suffisso_partita', '') or '')); col += 1
+            self.results_table.setItem(row_pos, col, QTableWidgetItem(getattr(partita, 'tipo', '') or '')); col += 1
+            self.results_table.setItem(row_pos, col, QTableWidgetItem(getattr(partita, 'stato', '') or '')); col += 1
         self.results_table.resizeColumnsToContents()
 
     def select_comune(self):
@@ -4852,11 +4839,11 @@ class LocalitaSelectionDialog(QDialog):
                     self.localita_table.setRowCount(len(localita_results))
                     for i, loc in enumerate(localita_results):
                         self.localita_table.setItem(
-                            i, 0, QTableWidgetItem(str(loc.get('id', ''))))
+                            i, 0, QTableWidgetItem(str(loc.id or '')))
                         self.localita_table.setItem(
-                            i, 1, QTableWidgetItem(loc.get('nome', '')))
+                            i, 1, QTableWidgetItem(loc.nome or ''))
                         self.localita_table.setItem(
-                            i, 2, QTableWidgetItem(loc.get('tipo', '')))
+                            i, 2, QTableWidgetItem(loc.tipo or ''))
                     self.localita_table.resizeColumnsToContents()
                 else:
                     self.logger.info(f"Nessuna località trovata per comune ID {self.comune_id} con filtro '{actual_filter_text}'.")

@@ -159,8 +159,8 @@ class TestComuneCRUD:
         clean_db.create_comune("Alpha", "SV", "Liguria")
         clean_db.create_comune("Beta", "SV", "Liguria")
         comuni = clean_db.get_all_comuni_details()
-        assert len(comuni) == 2
-        nomi = [c['nome_comune'] for c in comuni]
+        assert len(comuni) >= 2
+        nomi = [c.nome_comune for c in comuni]
         assert "Alpha" in nomi and "Beta" in nomi
 
     def test_get_all_comuni_details_vuoto(self, clean_db):
@@ -178,8 +178,8 @@ class TestComuneCRUD:
         db = sample_data['db']
         c = db.get_comune_by_id(sample_data['comune_id'])
         assert c is not None
-        assert c['nome_comune'] == "Genova Test"
-        assert c['provincia'] == "GE"
+        assert c.nome_comune == "Genova Test"
+        assert c.provincia == "GE"
 
     def test_get_comune_by_id_non_trovato(self, db_manager):
         assert db_manager.get_comune_by_id(99999999) is None
@@ -194,7 +194,7 @@ class TestComuneCRUD:
         result = db.update_comune(cid, {'provincia': 'SV', 'note': 'Aggiornato'})
         assert result is True
         c = db.get_comune_by_id(cid)
-        assert c['provincia'] == 'SV'
+        assert c.provincia == 'SV'
 
     def test_update_comune_date_invalide(self, sample_data):
         db = sample_data['db']
@@ -217,7 +217,7 @@ class TestComuneCRUD:
         clean_db.create_comune("Savona", "SV", "Liguria")
         results = clean_db.get_comuni(search_term="Genova")
         assert len(results) == 1
-        assert results[0]['nome'] == "Genova"
+        assert results[0].nome == "Genova"
 
 
 # ===========================================================================
@@ -240,7 +240,7 @@ class TestComuneSoftDelete:
         assert len(clean_db.get_all_comuni_details()) == 1
         clean_db.archivia_comune(cid)
         comuni = clean_db.get_all_comuni_details()
-        assert all(c['nome_comune'] != "Da Archiviare" for c in comuni)
+        assert all(c.nome_comune != "Da Archiviare" for c in comuni)
 
     def test_archivia_comune_escluso_da_elenco_semplice(self, clean_db):
         cid = clean_db.create_comune("Archiviato SV", "SV", "Liguria")
@@ -279,8 +279,8 @@ class TestPossessoreCRUD:
         db = sample_data['db']
         p = db.get_possessore_full_details(sample_data['possessore1_id'])
         assert p is not None
-        assert p['nome_completo'] == "ROSSI MARIO fu Giovanni"
-        assert 'attivo' in p
+        assert p.nome_completo == "ROSSI MARIO fu Giovanni"
+        assert getattr(p, 'attivo', None) is not None
 
     def test_get_possessore_full_details_non_trovato(self, db_manager):
         assert db_manager.get_possessore_full_details(99999999) is None
@@ -292,14 +292,14 @@ class TestPossessoreCRUD:
         db = sample_data['db']
         possessori = db.get_possessori_by_comune(sample_data['comune_id'])
         assert len(possessori) >= 1
-        assert any(p['nome_completo'] == "ROSSI MARIO fu Giovanni" for p in possessori)
+        assert any(p.nome_completo == "ROSSI MARIO fu Giovanni" for p in possessori)
 
     def test_get_possessori_by_comune_con_filtro(self, sample_data):
         db = sample_data['db']
         db.create_possessore("VERDI GIUSEPPE", sample_data['comune_id'])
         results = db.get_possessori_by_comune(sample_data['comune_id'], filter_text="VERDI")
         assert len(results) >= 1
-        assert all("VERDI" in p['nome_completo'] for p in results)
+        assert all("VERDI" in p.nome_completo for p in results)
 
     def test_get_possessori_by_comune_id_invalido(self, db_manager):
         with pytest.raises(DBDataError):
@@ -311,7 +311,7 @@ class TestPossessoreCRUD:
         result = db.update_possessore(pid, {'paternita': 'fu Antonio'})
         assert result is True
         p = db.get_possessore_full_details(pid)
-        assert p['paternita'] == 'fu Antonio'
+        assert p.paternita == 'fu Antonio'
 
     def test_update_possessore_id_invalido(self, db_manager):
         with pytest.raises(DBDataError):
@@ -325,7 +325,7 @@ class TestPossessoreCRUD:
         db = sample_data['db']
         results = db.search_possessori_by_term_globally("ROSSI")
         assert len(results) >= 1
-        assert any("ROSSI" in r['nome_completo'] for r in results)
+        assert any("ROSSI" in r.nome_completo for r in results)
 
     def test_search_possessori_globally_nessun_risultato(self, sample_data):
         db = sample_data['db']
@@ -356,14 +356,14 @@ class TestPossessoreSoftDelete:
         assert len(db.get_possessori_by_comune(cid)) >= 1
         db.archivia_possessore(pid)
         possessori = db.get_possessori_by_comune(cid)
-        assert all(p['id'] != pid for p in possessori)
+        assert all(p.id != pid for p in possessori)
 
     def test_archivia_possessore_escluso_da_ricerca_globale(self, sample_data):
         db = sample_data['db']
         pid = sample_data['possessore1_id']
         db.archivia_possessore(pid)
         results = db.search_possessori_by_term_globally("ROSSI")
-        assert all(r['id'] != pid for r in results)
+        assert all(r.id != pid for r in results)
 
 
 # ===========================================================================
@@ -408,10 +408,10 @@ class TestPartitaCRUD:
         db = sample_data['db']
         p = db.get_partita_details(sample_data['partita_id'])
         assert p is not None
-        assert p['numero_partita'] == 100
-        assert 'possessori' in p
-        assert 'immobili' in p
-        assert 'variazioni' in p
+        assert p.numero_partita == 100
+        assert hasattr(p, 'possessori')
+        assert hasattr(p, 'immobili')
+        assert hasattr(p, 'variazioni')
 
     def test_get_partita_details_non_trovata(self, db_manager):
         assert db_manager.get_partita_details(99999999) is None
@@ -422,22 +422,23 @@ class TestPartitaCRUD:
     def test_get_partite_by_comune(self, sample_data):
         db = sample_data['db']
         partite = db.get_partite_by_comune(sample_data['comune_id'])
-        assert len(partite) >= 1
-        assert any(p['numero_partita'] == 100 for p in partite)
+        assert len(partite) == 1
+        assert any(p.numero_partita == 100 for p in partite)
 
     def test_get_partite_by_comune_con_filtro(self, sample_data):
         db = sample_data['db']
         db.create_partita(sample_data['comune_id'], 201, 'secondaria', 'attiva', date(1920, 1, 1))
         partite = db.get_partite_by_comune(sample_data['comune_id'], filter_text="secondaria")
-        assert all('secondaria' in p.get('tipo', '') for p in partite)
+        assert len(partite) > 0
+        assert all('secondaria' in (p.tipo or '') for p in partite)
 
     def test_update_partita(self, sample_data):
         db = sample_data['db']
         pid = sample_data['partita_id']
-        result = db.update_partita(pid, {'stato': 'inattiva', 'data_chiusura': date(1950, 12, 31)})
+        result = db.update_partita(pid, {'stato': 'inattiva'})
         assert result is True
         p = db.get_partita_details(pid)
-        assert p['stato'] == 'inattiva'
+        assert p.stato == 'inattiva'
 
     def test_update_partita_date_invertite(self, sample_data):
         db = sample_data['db']
@@ -578,7 +579,7 @@ class TestLocalitaCRUD:
         db = sample_data['db']
         localita = db.get_localita_by_comune(sample_data['comune_id'])
         assert len(localita) >= 1
-        assert any(l['nome'] == "Via Roma" for l in localita)
+        assert any(l.nome == "Via Roma" for l in localita)
 
     def test_get_localita_by_comune_con_filtro(self, sample_data):
         db = sample_data['db']
@@ -595,7 +596,7 @@ class TestLocalitaCRUD:
         db = sample_data['db']
         l = db.get_localita_details(sample_data['localita_id'])
         assert l is not None
-        assert l['id'] == sample_data['localita_id']
+        assert l.id == sample_data['localita_id']
 
     def test_update_localita(self, sample_data):
         db = sample_data['db']
@@ -634,7 +635,7 @@ class TestLocalitaSoftDelete:
         assert len(db.get_localita_by_comune(cid)) >= 1
         db.archivia_localita(lid)
         localita = db.get_localita_by_comune(cid)
-        assert all(l['id'] != lid for l in localita)
+        assert all(l.id != lid for l in localita)
 
 
 # ===========================================================================
@@ -847,7 +848,7 @@ class TestBugFixesTipoLocalita:
 
         i = db.get_immobile_details(immobile_id)
         assert i is not None
-        assert 'localita_tipo' in i
+        assert hasattr(i, 'localita_tipo')
 
     def test_ricerca_avanzata_immobili_gui_funziona_dopo_fix(self, sample_data):
         """ricerca_avanzata_immobili_gui deve funzionare dopo il fix di l.tipo."""

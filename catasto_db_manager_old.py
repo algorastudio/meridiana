@@ -1,7 +1,21 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Gestore Database Catasto Storico (MODIFICATO per comune.id PK)
+==============================================================
+Script per la gestione del database catastale con supporto
+per operazioni CRUD, chiamate alle stored procedure, gestione utenti,
+audit, backup e funzionalità avanzate.
+
+Autore: Marco Santoro (Versione rivista e pulita)
+Data: 29/04/2025
+"""
+
 import psycopg2
 import psycopg2.errors # Importa specificamente gli errori
 from psycopg2.extras import DictCursor
 from psycopg2.extensions import ISOLATION_LEVEL_SERIALIZABLE,ISOLATION_LEVEL_AUTOCOMMIT
+
 from psycopg2 import sql, extras, pool
 import sys, csv
 import logging
@@ -27,31 +41,28 @@ from PyQt5.QtCore import (QDate, QDateTime, QPoint, QProcess, QSettings,
                           QSize, QStandardPaths, Qt, QTimer, QUrl, 
                           pyqtSignal,QProcessEnvironment,QObject)
 
+
+
+
+
 COLONNE_POSSESSORI_DETTAGLI_NUM = 6 # Esempio: ID, Nome Compl, Cognome/Nome, Paternità, Quota, Titolo
 COLONNE_POSSESSORI_DETTAGLI_LABELS = ["ID Poss.", "Nome Completo", "Cognome Nome", "Paternità", "Quota", "Titolo"]
-logger = logging.getLogger(__name__)
-from db_modules.base_manager import (
-    BaseDBManager,
-    DBMError,
-    DBUniqueConstraintError,
-    DBNotFoundError,
-    DBDataError
-)
-from db_modules.comuni_mixin import ComuniMixin
-from db_modules.partite_mixin import PartiteMixin
-from db_modules.possessori_mixin import PossessoriMixin
-from db_modules.immobili_mixin import ImmobiliMixin
-from db_modules.localita_mixin import LocalitaMixin
-from db_modules.tipologiche_mixin import TipologicheMixin
-from db_modules.variazioni_mixin import VariazioniMixin
-from db_modules.documenti_mixin import DocumentiMixin
-from db_modules.relazioni_mixin import RelazioniMixin
-from db_modules.utenti_mixin import UtentiMixin
-from db_modules.sistema_mixin import SistemaMixin
-from db_modules.report_mixin import ReportMixin
-from db_modules.ricerca_mixin import RicercaMixin
 
-class CatastoDBManager(BaseDBManager, ComuniMixin, PartiteMixin, PossessoriMixin, ImmobiliMixin, LocalitaMixin, TipologicheMixin, VariazioniMixin, DocumentiMixin, RelazioniMixin, UtentiMixin, SistemaMixin, ReportMixin, RicercaMixin):
+logger = logging.getLogger(__name__)
+# ------------ ECCEZIONI PERSONALIZZATE ------------
+class DBMError(Exception):
+    """Classe base per errori specifici del DBManager."""
+    pass
+
+class DBUniqueConstraintError(DBMError):
+    """Sollevata quando un vincolo di unicità viene violato."""
+    def __init__(self, message, constraint_name=None, details=None):
+        super().__init__(message)
+        self.constraint_name = constraint_name
+        self.details = details
+
+class DBNotFoundError(DBMError):
+    """Sollevata quando un record atteso non viene trovato per un'operazione."""
     pass
 
 class DBDataError(DBMError):
@@ -83,57 +94,24 @@ class CatastoDBManager:
         self.logger = logging.getLogger(f"CatastoDB_{dbname}_{host}_{port}")
         # ... (resto della configurazione del logger come prima) ...
         self.logger.info(f"Inizializzato gestore DB (parametri memorizzati) per {dbname}@{host}")
-        self.pool = None
-        self._loc_tipo_migrated_cache: Optional[bool] = None  # lazy, see _loc_tipo_migrated
-
-    @property
-    def _loc_tipo_migrated(self) -> bool:
-        """True se localita.tipo_id esiste (migrazione 20 applicata). Risultato cachato.
-        Se il pool non era pronto al primo check (False per timeout), riprova finché
-        il pool è disponibile per evitare di bloccarsi sul risultato sbagliato."""
-        if self._loc_tipo_migrated_cache is None or (
-                not self._loc_tipo_migrated_cache and self.pool is not None):
-            result = self._detect_localita_schema()
-            if result or self.pool is not None:
-                # Cachi solo quando il pool è pronto (risultato affidabile)
-                self._loc_tipo_migrated_cache = result
-                if not result:
-                    self.logger.warning(
-                        "Schema legacy: localita.tipo_id non esiste. "
-                        "Eseguire sql_scripts/20_tipo_localita.sql per migrare il DB.")
-        return bool(self._loc_tipo_migrated_cache)
-
-    def _detect_localita_schema(self) -> bool:
-        """Controlla via information_schema se localita.tipo_id esiste."""
-        query = """
-            SELECT COUNT(*) FROM information_schema.columns
-            WHERE table_schema = %s AND table_name = 'localita' AND column_name = 'tipo_id';
-        """
-        try:
-            with self._get_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(query, (self.schema,))
-                    row = cur.fetchone()
-                    return (row[0] if row else 0) > 0
-        except Exception as e:
-            self.logger.warning(f"Impossibile rilevare schema localita: {e}. Assumo schema legacy.")
-            return False
-
-    def _tipo_join(self, alias: str = 'l') -> tuple:
-        """
-        Restituisce (colonna_select, clausola_join) compatibile con lo schema attuale.
-        Schema migrato   → JOIN a tipo_localita, colonna tl.nome
-        Schema legacy    → nessun JOIN, colonna alias.tipo (testo)
-        """
-        if self._loc_tipo_migrated:
-            return (
-                "tl.nome AS tipo",
-                f"LEFT JOIN {self.schema}.tipo_localita tl ON {alias}.tipo_id = tl.id"
-            )
-        return (f"{alias}.tipo AS tipo", "")
-
+        self.pool = None # Il pool viene inizializzato esplicitamente dopo
     # In catasto_db_manager.py, SOSTITUISCI il metodo initialize_main_pool con questo:
 
+    def check_connection_alive(self):
+        if not self.pool:
+            return False
+        conn = None
+        try:
+            conn = self.pool.getconn()
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+            return True
+        except Exception:
+            return False
+        finally:
+            if conn:
+                self.pool.putconn(conn)
+    
     def initialize_main_pool(self) -> bool:
         if self.pool:
             self.logger.info("Pool principale già inizializzato.")
@@ -500,20 +478,76 @@ class CatastoDBManager:
         except Exception as e:
             self.logger.error(f"Errore generico in create_comune: {e}", exc_info=True)
             raise DBMError(f"Errore database durante l'aggiunta del comune: {e}") from e
+    def registra_comune_nel_db(self, nome: str, provincia: str, regione: str) -> Optional[int]:
+            comune_id: Optional[int] = None
+            query_insert = """
+            INSERT INTO catasto.comune (nome, provincia, regione)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (nome) DO NOTHING
+            RETURNING id;
+            """
+            query_select = "SELECT id FROM catasto.comune WHERE nome = %s;"
 
-    def get_next_numero_partita(self, comune_id: int) -> Optional[int]:
-        """Restituisce MAX(numero_partita)+1 per il comune dato, o 1 se nessuna partita esiste."""
-        query = f"SELECT COALESCE(MAX(numero_partita), 0) + 1 FROM {self.schema}.partita WHERE comune_id = %s;"
-        try:
-            with self._get_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(query, (comune_id,))
-                    row = cur.fetchone()
-                    return row[0] if row else 1
-        except Exception as e:
-            self.logger.error(f"Errore get_next_numero_partita: {e}")
-            return None
+            try:
+                if self.execute_query(query_insert, (nome, provincia, regione)):
+                    # execute_query DEVE aver impostato self.cursor se ha restituito True
+                    if self.cursor is None: # Controllo di sicurezza aggiuntivo
+                        logger.error(f"Errore critico: self.cursor è None dopo execute_query riuscita per INSERT comune '{nome}'.")
+                        self.rollback()
+                        return None
 
+                    risultato_insert = None
+                    if self.cursor.description: # Verifica se la query poteva ritornare risultati
+                        try:
+                            risultato_insert = self.cursor.fetchone() # Prova a fare fetch
+                        except psycopg2.ProgrammingError as pe: # Es. "no results to fetch"
+                            logger.warning(f"Nessun risultato da fetchone() per INSERT comune '{nome}' (probabile ON CONFLICT DO NOTHING): {pe}")
+                            risultato_insert = None
+
+                    if risultato_insert and 'id' in risultato_insert:
+                        comune_id = risultato_insert['id']
+                        self.commit()
+                        logger.info(f"Comune '{nome}' (ID: {comune_id}) inserito con successo nel database.")
+                        return comune_id
+                    else: # L'INSERT non ha inserito (ON CONFLICT DO NOTHING) o ID non recuperato
+                        logger.info(f"Comune '{nome}' non inserito da INSERT (probabile conflitto). Tentativo di SELECT.")
+                        if self.execute_query(query_select, (nome,)):
+                            if self.cursor is None: # Controllo di sicurezza
+                                logger.error(f"Errore critico: self.cursor è None dopo execute_query riuscita per SELECT comune '{nome}'.")
+                                self.rollback()
+                                return None
+                            
+                            risultato_select = self.fetchone() # fetchone() ora dovrebbe usare il cursore del SELECT
+                            if risultato_select and 'id' in risultato_select:
+                                comune_id = risultato_select['id']
+                                self.commit() 
+                                logger.info(f"Comune '{nome}' (ID: {comune_id}) già esistente, operazione confermata.")
+                                return comune_id
+                            else:
+                                logger.error(f"Errore logico: Comune '{nome}' non inserito e non trovato dopo ON CONFLICT e successivo SELECT.")
+                                self.rollback()
+                                return None
+                        else: # Errore durante il SELECT
+                            # execute_query dovrebbe aver già gestito il rollback
+                            logger.error(f"Errore DB nel selezionare il comune '{nome}' dopo un potenziale conflitto.")
+                            return None
+                else: # Errore durante l'INSERT iniziale
+                    # execute_query dovrebbe aver già gestito il rollback
+                    logger.error(f"Errore DB iniziale durante l'inserimento del comune '{nome}'.")
+                    return None
+
+            except psycopg2.Error as db_err:
+                logger.error(f"Errore database (psycopg2) in registra_comune_nel_db per '{nome}': {db_err}")
+                self.rollback()
+                return None
+            except AttributeError as ae: # Specifico per l'errore 'has no attribute cursor' se persiste
+                logger.error(f"AttributeError in registra_comune_nel_db per '{nome}': {ae}. Controllare gestione self.cursor.")
+                self.rollback()
+                return None
+            except Exception as e:
+                logger.error(f"Errore Python generico in registra_comune_nel_db per '{nome}': {e}")
+                self.rollback()
+                return None
     def get_partite_by_comune_paginate(self, comune_id: int, limit: int = 100, offset: int = 0, filter_text: Optional[str] = None) -> Tuple[List[Dict[str, Any]], int]:
         """
         Recupera le partite in modo paginato, restituendo anche il conteggio totale.
@@ -768,21 +802,22 @@ class CatastoDBManager:
         if not isinstance(comune_id, int) or comune_id <= 0:
             return []
 
-        tipo_col, tipo_join = self._tipo_join('l')
+        # --- INIZIO CORREZIONE: Aggiunto l.id AS localita_id alla query ---
         query = f"""
-            SELECT
-                i.id,
-                i.natura,
+            SELECT 
+                i.id, 
+                i.natura, 
                 l.nome AS localita_nome,
-                {tipo_col.replace('AS tipo', 'AS tipo_localita')},
+                tl.nome as tipo_localita,
                 l.id as localita_id
             FROM {self.schema}.immobile i
             JOIN {self.schema}.partita p ON i.partita_id = p.id
             JOIN {self.schema}.localita l ON i.localita_id = l.id
-            {tipo_join}
+            LEFT JOIN {self.schema}.tipo_localita tl ON l.tipo_id = tl.id
             WHERE p.comune_id = %s
             ORDER BY l.nome, i.natura;
         """
+        # --- FINE CORREZIONE ---
         try:
             with self._get_connection() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
@@ -1255,18 +1290,17 @@ class CatastoDBManager:
 
     def get_elenco_immobili_per_esportazione(self, comune_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """Recupera un elenco completo di immobili per l'esportazione."""
-        tipo_col, tipo_join = self._tipo_join('l')
         query = f"""
-            SELECT
+            SELECT 
                 i.id AS id_immobile, i.natura, i.classificazione, i.consistenza,
                 i.numero_piani, i.numero_vani, l.nome AS localita_nome,
-                {tipo_col.replace('AS tipo', 'AS localita_tipo')}, p.numero_partita,
+                tl.nome AS localita_tipo, p.numero_partita,
                 p.suffisso_partita, c.nome AS comune_nome
             FROM {self.schema}.immobile i
             JOIN {self.schema}.partita p ON i.partita_id = p.id
             JOIN {self.schema}.comune c ON p.comune_id = c.id
             JOIN {self.schema}.localita l ON i.localita_id = l.id
-            {tipo_join}
+            LEFT JOIN {self.schema}.tipo_localita tl ON l.tipo_id = tl.id
         """
         params = []
         if comune_id:
@@ -1283,12 +1317,11 @@ class CatastoDBManager:
 
     def get_elenco_localita_per_esportazione(self, comune_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """Recupera un elenco completo di località per l'esportazione."""
-        tipo_col, tipo_join = self._tipo_join('l')
         query = f"""
-            SELECT l.id, l.nome, {tipo_col}, c.nome AS comune_nome
+            SELECT l.id, l.nome, tl.nome AS tipo, c.nome AS comune_nome
             FROM {self.schema}.localita l
             JOIN {self.schema}.comune c ON l.comune_id = c.id
-            {tipo_join}
+            LEFT JOIN {self.schema}.tipo_localita tl ON l.tipo_id = tl.id
         """
         params = []
         if comune_id:
@@ -1308,12 +1341,14 @@ class CatastoDBManager:
         if not isinstance(comune_id, int) or comune_id <= 0:
             raise DBDataError("ID comune non valido.")
 
-        tipo_col, tipo_join = self._tipo_join('loc')
-        order_by = "tl.nome, loc.nome" if self._loc_tipo_migrated else "loc.nome"
+        # --- INIZIO CORREZIONE: Query aggiornata con JOIN ---
         query_base = f"""
-            SELECT loc.id, loc.nome, {tipo_col}
+            SELECT 
+                loc.id, 
+                loc.nome,
+                tl.nome AS tipo
             FROM {self.schema}.localita loc
-            {tipo_join}
+            LEFT JOIN {self.schema}.tipo_localita tl ON loc.tipo_id = tl.id
             WHERE loc.comune_id = %s AND loc.archiviato = FALSE
         """
 
@@ -1323,7 +1358,7 @@ class CatastoDBManager:
             query_base += " AND loc.nome ILIKE %s"
             params.append(f"%{filter_text}%")
 
-        query = query_base + f" ORDER BY {order_by};"
+        query = query_base + " ORDER BY tl.nome, loc.nome;"
 
         try:
             with self._get_connection() as conn:
@@ -1442,11 +1477,10 @@ class CatastoDBManager:
         """Recupera i dettagli di una singola località, incluso il nome del comune."""
         if not isinstance(localita_id, int) or localita_id <= 0: return None
 
-        tipo_col, tipo_join = self._tipo_join('loc')
         query = f"""
-            SELECT loc.id, loc.nome, {tipo_col}, loc.comune_id, com.nome AS comune_nome
+            SELECT loc.id, loc.nome, tl.nome AS tipo, loc.comune_id, com.nome AS comune_nome
             FROM {self.schema}.localita loc
-            {tipo_join}
+            LEFT JOIN {self.schema}.tipo_localita tl ON loc.tipo_id = tl.id
             JOIN {self.schema}.comune com ON loc.comune_id = com.id
             WHERE loc.id = %s;
         """
@@ -1555,17 +1589,18 @@ class CatastoDBManager:
                     cur.execute(query_poss, (partita_id,))
                     partita_details['possessori'] = [dict(row) for row in cur.fetchall()]
 
-                    tipo_col_imm, tipo_join_imm = self._tipo_join('l')
+                    # --- INIZIO CORREZIONE QUI ---
+                    # 3. Immobili (query aggiornata con JOIN a tipo_localita)
                     query_imm = f"""
                         SELECT i.id, i.natura, i.numero_piani, i.numero_vani, i.consistenza,
-                            i.classificazione, l.nome as localita_nome,
-                            {tipo_col_imm.replace('AS tipo', 'AS localita_tipo')}
+                            i.classificazione, l.nome as localita_nome, tl.nome as localita_tipo
                         FROM {self.schema}.immobile i
                         JOIN {self.schema}.localita l ON i.localita_id = l.id
-                        {tipo_join_imm}
+                        LEFT JOIN {self.schema}.tipo_localita tl ON l.tipo_id = tl.id
                         WHERE i.partita_id = %s
                         ORDER BY l.nome, i.natura;
                     """
+                    # --- FINE CORREZIONE QUI ---
                     cur.execute(query_imm, (partita_id,))
                     partita_details['immobili'] = [dict(row) for row in cur.fetchall()]
 
@@ -2337,19 +2372,18 @@ class CatastoDBManager:
             self.logger.error(f"get_immobile_details: immobile_id non valido: {immobile_id}")
             return None
 
-        tipo_col, tipo_join = self._tipo_join('l')
         query = f"""
             SELECT
                 i.id, i.partita_id, i.localita_id, i.natura, i.classificazione, i.consistenza,
                 i.numero_piani, i.numero_vani,
                 p.numero_partita, p.suffisso_partita,
                 c.nome AS comune_nome,
-                l.nome AS localita_nome, {tipo_col.replace('AS tipo', 'AS localita_tipo')}
+                l.nome AS localita_nome, tl.nome AS localita_tipo
             FROM {self.schema}.immobile i
             JOIN {self.schema}.partita p ON i.partita_id = p.id
             JOIN {self.schema}.comune c ON p.comune_id = c.id
             JOIN {self.schema}.localita l ON i.localita_id = l.id
-            {tipo_join}
+            LEFT JOIN {self.schema}.tipo_localita tl ON l.tipo_id = tl.id
             WHERE i.id = %s;
         """
         try:
@@ -3991,16 +4025,16 @@ class CatastoDBManager:
             SELECT
                 l.id AS entity_id,
                 l.nome AS display_text,
-                'Tipo: ' || COALESCE({('tl.nome' if self._loc_tipo_migrated else "l.tipo")}, 'N/D') || ' | Comune: ' || c.nome AS detail_text,
+                'Tipo: ' || COALESCE(tl.nome, 'N/D') || ' | Comune: ' || c.nome AS detail_text,
                 similarity(l.nome, %s) AS similarity_score,
                 'nome' AS search_field,
                 l.nome,
-                {('tl.nome' if self._loc_tipo_migrated else "l.tipo")} AS tipo,
+                tl.nome AS tipo,
                 c.nome as comune_nome,
                 COALESCE(im.num_immobili, 0) as num_immobili
             FROM {self.schema}.localita l
             JOIN {self.schema}.comune c ON l.comune_id = c.id
-            {'LEFT JOIN ' + self.schema + '.tipo_localita tl ON l.tipo_id = tl.id' if self._loc_tipo_migrated else ''}
+            LEFT JOIN {self.schema}.tipo_localita tl ON l.tipo_id = tl.id -- <-- JOIN con la nuova tabella
             LEFT JOIN (
                 SELECT localita_id, COUNT(*) as num_immobili
                 FROM {self.schema}.immobile
