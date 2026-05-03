@@ -94,7 +94,49 @@ class CatastoDBManager:
         self.logger = logging.getLogger(f"CatastoDB_{dbname}_{host}_{port}")
         # ... (resto della configurazione del logger come prima) ...
         self.logger.info(f"Inizializzato gestore DB (parametri memorizzati) per {dbname}@{host}")
-        self.pool = None # Il pool viene inizializzato esplicitamente dopo
+        self.pool = None
+        self._loc_tipo_migrated_cache: Optional[bool] = None  # lazy, see _loc_tipo_migrated
+
+    @property
+    def _loc_tipo_migrated(self) -> bool:
+        """True se localita.tipo_id esiste (migrazione 20 applicata). Risultato cachato."""
+        if self._loc_tipo_migrated_cache is None:
+            self._loc_tipo_migrated_cache = self._detect_localita_schema()
+            if not self._loc_tipo_migrated_cache:
+                self.logger.warning(
+                    "Schema legacy rilevato: localita.tipo_id non esiste. "
+                    "Eseguire sql_scripts/20_tipo_localita.sql per migrare il DB.")
+        return self._loc_tipo_migrated_cache
+
+    def _detect_localita_schema(self) -> bool:
+        """Controlla via information_schema se localita.tipo_id esiste."""
+        query = """
+            SELECT COUNT(*) FROM information_schema.columns
+            WHERE table_schema = %s AND table_name = 'localita' AND column_name = 'tipo_id';
+        """
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query, (self.schema,))
+                    row = cur.fetchone()
+                    return (row[0] if row else 0) > 0
+        except Exception as e:
+            self.logger.warning(f"Impossibile rilevare schema localita: {e}. Assumo schema legacy.")
+            return False
+
+    def _tipo_join(self, alias: str = 'l') -> tuple:
+        """
+        Restituisce (colonna_select, clausola_join) compatibile con lo schema attuale.
+        Schema migrato   → JOIN a tipo_localita, colonna tl.nome
+        Schema legacy    → nessun JOIN, colonna alias.tipo (testo)
+        """
+        if self._loc_tipo_migrated:
+            return (
+                "tl.nome AS tipo",
+                f"LEFT JOIN {self.schema}.tipo_localita tl ON {alias}.tipo_id = tl.id"
+            )
+        return (f"{alias}.tipo AS tipo", "")
+
     # In catasto_db_manager.py, SOSTITUISCI il metodo initialize_main_pool con questo:
 
     def initialize_main_pool(self) -> bool:
@@ -731,22 +773,21 @@ class CatastoDBManager:
         if not isinstance(comune_id, int) or comune_id <= 0:
             return []
 
-        # --- INIZIO CORREZIONE: Aggiunto l.id AS localita_id alla query ---
+        tipo_col, tipo_join = self._tipo_join('l')
         query = f"""
-            SELECT 
-                i.id, 
-                i.natura, 
+            SELECT
+                i.id,
+                i.natura,
                 l.nome AS localita_nome,
-                tl.nome as tipo_localita,
+                {tipo_col.replace('AS tipo', 'AS tipo_localita')},
                 l.id as localita_id
             FROM {self.schema}.immobile i
             JOIN {self.schema}.partita p ON i.partita_id = p.id
             JOIN {self.schema}.localita l ON i.localita_id = l.id
-            LEFT JOIN {self.schema}.tipo_localita tl ON l.tipo_id = tl.id
+            {tipo_join}
             WHERE p.comune_id = %s
             ORDER BY l.nome, i.natura;
         """
-        # --- FINE CORREZIONE ---
         try:
             with self._get_connection() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
@@ -1219,17 +1260,18 @@ class CatastoDBManager:
 
     def get_elenco_immobili_per_esportazione(self, comune_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """Recupera un elenco completo di immobili per l'esportazione."""
+        tipo_col, tipo_join = self._tipo_join('l')
         query = f"""
-            SELECT 
+            SELECT
                 i.id AS id_immobile, i.natura, i.classificazione, i.consistenza,
                 i.numero_piani, i.numero_vani, l.nome AS localita_nome,
-                tl.nome AS localita_tipo, p.numero_partita,
+                {tipo_col.replace('AS tipo', 'AS localita_tipo')}, p.numero_partita,
                 p.suffisso_partita, c.nome AS comune_nome
             FROM {self.schema}.immobile i
             JOIN {self.schema}.partita p ON i.partita_id = p.id
             JOIN {self.schema}.comune c ON p.comune_id = c.id
             JOIN {self.schema}.localita l ON i.localita_id = l.id
-            LEFT JOIN {self.schema}.tipo_localita tl ON l.tipo_id = tl.id
+            {tipo_join}
         """
         params = []
         if comune_id:
@@ -1246,11 +1288,12 @@ class CatastoDBManager:
 
     def get_elenco_localita_per_esportazione(self, comune_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """Recupera un elenco completo di località per l'esportazione."""
+        tipo_col, tipo_join = self._tipo_join('l')
         query = f"""
-            SELECT l.id, l.nome, tl.nome AS tipo, c.nome AS comune_nome
+            SELECT l.id, l.nome, {tipo_col}, c.nome AS comune_nome
             FROM {self.schema}.localita l
             JOIN {self.schema}.comune c ON l.comune_id = c.id
-            LEFT JOIN {self.schema}.tipo_localita tl ON l.tipo_id = tl.id
+            {tipo_join}
         """
         params = []
         if comune_id:
@@ -1270,14 +1313,12 @@ class CatastoDBManager:
         if not isinstance(comune_id, int) or comune_id <= 0:
             raise DBDataError("ID comune non valido.")
 
-        # --- INIZIO CORREZIONE: Query aggiornata con JOIN ---
+        tipo_col, tipo_join = self._tipo_join('loc')
+        order_by = "tl.nome, loc.nome" if self._loc_tipo_migrated else "loc.nome"
         query_base = f"""
-            SELECT 
-                loc.id, 
-                loc.nome,
-                tl.nome AS tipo
+            SELECT loc.id, loc.nome, {tipo_col}
             FROM {self.schema}.localita loc
-            LEFT JOIN {self.schema}.tipo_localita tl ON loc.tipo_id = tl.id
+            {tipo_join}
             WHERE loc.comune_id = %s AND loc.archiviato = FALSE
         """
 
@@ -1287,7 +1328,7 @@ class CatastoDBManager:
             query_base += " AND loc.nome ILIKE %s"
             params.append(f"%{filter_text}%")
 
-        query = query_base + " ORDER BY tl.nome, loc.nome;"
+        query = query_base + f" ORDER BY {order_by};"
 
         try:
             with self._get_connection() as conn:
@@ -1406,10 +1447,11 @@ class CatastoDBManager:
         """Recupera i dettagli di una singola località, incluso il nome del comune."""
         if not isinstance(localita_id, int) or localita_id <= 0: return None
 
+        tipo_col, tipo_join = self._tipo_join('loc')
         query = f"""
-            SELECT loc.id, loc.nome, tl.nome AS tipo, loc.comune_id, com.nome AS comune_nome
+            SELECT loc.id, loc.nome, {tipo_col}, loc.comune_id, com.nome AS comune_nome
             FROM {self.schema}.localita loc
-            LEFT JOIN {self.schema}.tipo_localita tl ON loc.tipo_id = tl.id
+            {tipo_join}
             JOIN {self.schema}.comune com ON loc.comune_id = com.id
             WHERE loc.id = %s;
         """
@@ -1518,18 +1560,17 @@ class CatastoDBManager:
                     cur.execute(query_poss, (partita_id,))
                     partita_details['possessori'] = [dict(row) for row in cur.fetchall()]
 
-                    # --- INIZIO CORREZIONE QUI ---
-                    # 3. Immobili (query aggiornata con JOIN a tipo_localita)
+                    tipo_col_imm, tipo_join_imm = self._tipo_join('l')
                     query_imm = f"""
                         SELECT i.id, i.natura, i.numero_piani, i.numero_vani, i.consistenza,
-                            i.classificazione, l.nome as localita_nome, tl.nome as localita_tipo
+                            i.classificazione, l.nome as localita_nome,
+                            {tipo_col_imm.replace('AS tipo', 'AS localita_tipo')}
                         FROM {self.schema}.immobile i
                         JOIN {self.schema}.localita l ON i.localita_id = l.id
-                        LEFT JOIN {self.schema}.tipo_localita tl ON l.tipo_id = tl.id
+                        {tipo_join_imm}
                         WHERE i.partita_id = %s
                         ORDER BY l.nome, i.natura;
                     """
-                    # --- FINE CORREZIONE QUI ---
                     cur.execute(query_imm, (partita_id,))
                     partita_details['immobili'] = [dict(row) for row in cur.fetchall()]
 
@@ -2301,18 +2342,19 @@ class CatastoDBManager:
             self.logger.error(f"get_immobile_details: immobile_id non valido: {immobile_id}")
             return None
 
+        tipo_col, tipo_join = self._tipo_join('l')
         query = f"""
             SELECT
                 i.id, i.partita_id, i.localita_id, i.natura, i.classificazione, i.consistenza,
                 i.numero_piani, i.numero_vani,
                 p.numero_partita, p.suffisso_partita,
                 c.nome AS comune_nome,
-                l.nome AS localita_nome, tl.nome AS localita_tipo
+                l.nome AS localita_nome, {tipo_col.replace('AS tipo', 'AS localita_tipo')}
             FROM {self.schema}.immobile i
             JOIN {self.schema}.partita p ON i.partita_id = p.id
             JOIN {self.schema}.comune c ON p.comune_id = c.id
             JOIN {self.schema}.localita l ON i.localita_id = l.id
-            LEFT JOIN {self.schema}.tipo_localita tl ON l.tipo_id = tl.id
+            {tipo_join}
             WHERE i.id = %s;
         """
         try:
@@ -3954,16 +3996,16 @@ class CatastoDBManager:
             SELECT
                 l.id AS entity_id,
                 l.nome AS display_text,
-                'Tipo: ' || COALESCE(tl.nome, 'N/D') || ' | Comune: ' || c.nome AS detail_text,
+                'Tipo: ' || COALESCE({('tl.nome' if self._loc_tipo_migrated else "l.tipo")}, 'N/D') || ' | Comune: ' || c.nome AS detail_text,
                 similarity(l.nome, %s) AS similarity_score,
                 'nome' AS search_field,
                 l.nome,
-                tl.nome AS tipo,
+                {('tl.nome' if self._loc_tipo_migrated else "l.tipo")} AS tipo,
                 c.nome as comune_nome,
                 COALESCE(im.num_immobili, 0) as num_immobili
             FROM {self.schema}.localita l
             JOIN {self.schema}.comune c ON l.comune_id = c.id
-            LEFT JOIN {self.schema}.tipo_localita tl ON l.tipo_id = tl.id -- <-- JOIN con la nuova tabella
+            {'LEFT JOIN ' + self.schema + '.tipo_localita tl ON l.tipo_id = tl.id' if self._loc_tipo_migrated else ''}
             LEFT JOIN (
                 SELECT localita_id, COUNT(*) as num_immobili
                 FROM {self.schema}.immobile
