@@ -2144,8 +2144,9 @@ class _PossessoriPage(QWizardPage):
         self._combo.clear()
         self._combo.addItem("— Seleziona —", None)
         for p in self._wiz.possessori_cache:
+            label_comune = getattr(p, 'comune_riferimento_nome', None) or getattr(p, 'comune_nome', '') or ''
             self._combo.addItem(
-                f"{p['nome_completo']}  ({p['comune_riferimento_nome']})", p['id'])
+                f"{getattr(p, 'nome_completo', '')}  ({label_comune})", getattr(p, 'id', None))
 
     def _add_selected(self):
         pid = self._combo.currentData()
