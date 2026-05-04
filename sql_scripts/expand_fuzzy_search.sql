@@ -538,20 +538,21 @@ BEGIN
     UNION ALL
     
     -- Località (se abilitato)
-    (SELECT 
+    (SELECT
         'localita'::TEXT as entity_type,
         l.id as entity_id,
         l.nome as display_text,
-        CONCAT(l.tipo, ' ', l.nome, ' - ', c.nome) as detail_text,
+        CONCAT(COALESCE(tl.nome, ''), ' ', l.nome, ' - ', c.nome) as detail_text,
         similarity(l.nome, query_text) as similarity_score,
         'nome'::TEXT as search_field,
         jsonb_build_object(
-            'tipo', l.tipo,
+            'tipo', tl.nome,
             'civico', l.civico,
             'comune', c.nome
         ) as additional_info
     FROM localita l
     JOIN comune c ON l.comune_id = c.id
+    LEFT JOIN tipo_localita tl ON l.tipo_id = tl.id
     WHERE search_localita AND l.nome % query_text
     ORDER BY similarity(l.nome, query_text) DESC
     LIMIT max_results_per_type)
