@@ -988,38 +988,42 @@ class RicercaAvanzataImmobiliWidget(QWidget):
                     len(immobili_trovati))
                 for row_idx, immobile in enumerate(immobili_trovati):
                     col = 0
+                    id_imm = getattr(immobile, 'id_immobile', None) or getattr(immobile, 'id', None)
                     self.risultati_immobili_table.setItem(
-                        row_idx, col, QTableWidgetItem(str(immobile.get('id_immobile', ''))))
+                        row_idx, col, QTableWidgetItem(str(id_imm if id_imm is not None else '')))
                     col += 1
                     self.risultati_immobili_table.setItem(
-                        row_idx, col, QTableWidgetItem(str(immobile.get('numero_partita', ''))))
+                        row_idx, col, QTableWidgetItem(str(getattr(immobile, 'numero_partita', '') or '')))
                     col += 1
                     self.risultati_immobili_table.setItem(
-                        row_idx, col, QTableWidgetItem(immobile.get('comune_nome', '')))
+                        row_idx, col, QTableWidgetItem(getattr(immobile, 'comune_nome', '') or ''))
                     col += 1
-                    localita_display = f"{immobile.get('localita_nome', '')}"
-                    if immobile.get('localita_tipo'):
-                        localita_display += f" ({immobile.get('localita_tipo')})"
+                    localita_display = f"{getattr(immobile, 'localita_nome', '') or ''}"
+                    loc_tipo = getattr(immobile, 'localita_tipo', None)
+                    if loc_tipo:
+                        localita_display += f" ({loc_tipo})"
                     self.risultati_immobili_table.setItem(
                         row_idx, col, QTableWidgetItem(localita_display.strip()))
                     col += 1
                     self.risultati_immobili_table.setItem(
-                        row_idx, col, QTableWidgetItem(immobile.get('natura', '')))
+                        row_idx, col, QTableWidgetItem(getattr(immobile, 'natura', '') or ''))
                     col += 1
                     self.risultati_immobili_table.setItem(
-                        row_idx, col, QTableWidgetItem(immobile.get('classificazione', '')))
+                        row_idx, col, QTableWidgetItem(getattr(immobile, 'classificazione', '') or ''))
                     col += 1
                     self.risultati_immobili_table.setItem(
-                        row_idx, col, QTableWidgetItem(immobile.get('consistenza', '')))
+                        row_idx, col, QTableWidgetItem(getattr(immobile, 'consistenza', '') or ''))
                     col += 1
-                    self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(str(
-                        immobile.get('numero_piani', '')) if immobile.get('numero_piani') is not None else ''))
+                    n_piani = getattr(immobile, 'numero_piani', None)
+                    self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(
+                        str(n_piani) if n_piani is not None else ''))
                     col += 1
-                    self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(str(
-                        immobile.get('numero_vani', '')) if immobile.get('numero_vani') is not None else ''))
+                    n_vani = getattr(immobile, 'numero_vani', None)
+                    self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(
+                        str(n_vani) if n_vani is not None else ''))
                     col += 1
                     self.risultati_immobili_table.setItem(
-                        row_idx, col, QTableWidgetItem(immobile.get('possessori_attuali', '')))
+                        row_idx, col, QTableWidgetItem(getattr(immobile, 'possessori_attuali', '') or ''))
                     col += 1  # Campo dalla funzione SQL
 
                 # self.risultati_immobili_table.resizeColumnsToContents() # Potrebbe essere lento con molti dati
