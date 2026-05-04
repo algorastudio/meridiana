@@ -692,10 +692,10 @@ class PartitaDetailsDialog(QDialog):
         if self.partita.possessori:
             possessori_table.setRowCount(len(self.partita.possessori))
             for i, possessore in enumerate(self.partita.possessori):
-                possessori_table.setItem(i, 0, QTableWidgetItem(str(getattr(possessore, 'id', ''))))
-                possessori_table.setItem(i, 1, QTableWidgetItem(getattr(possessore, 'nome_completo', '') or ''))
-                possessori_table.setItem(i, 2, QTableWidgetItem(getattr(possessore, 'titolo', '') or ''))
-                possessori_table.setItem(i, 3, QTableWidgetItem(getattr(possessore, 'quota', '') or ''))
+                possessori_table.setItem(i, 0, QTableWidgetItem(str(possessore.get('id', ''))))
+                possessori_table.setItem(i, 1, QTableWidgetItem(possessore.get('nome_completo', '') or ''))
+                possessori_table.setItem(i, 2, QTableWidgetItem(possessore.get('titolo', '') or ''))
+                possessori_table.setItem(i, 3, QTableWidgetItem(possessore.get('quota', '') or ''))
         possessori_layout.addWidget(possessori_table)
         self.tabs.addTab(possessori_tab, "Possessori")
 
@@ -726,33 +726,33 @@ class PartitaDetailsDialog(QDialog):
             variazioni_table.setRowCount(len(self.partita.variazioni))
             for i, var in enumerate(self.partita.variazioni):
                 col = 0
-                variazioni_table.setItem(i, col, QTableWidgetItem(str(getattr(var, 'id', '')))); col += 1
-                variazioni_table.setItem(i, col, QTableWidgetItem(getattr(var, 'tipo', '') or '')); col += 1
-                variazioni_table.setItem(i, col, QTableWidgetItem(str(getattr(var, 'data_variazione', '') or ''))); col += 1
+                variazioni_table.setItem(i, col, QTableWidgetItem(str(var.get('id', '')))); col += 1
+                variazioni_table.setItem(i, col, QTableWidgetItem(var.get('tipo', '') or '')); col += 1
+                variazioni_table.setItem(i, col, QTableWidgetItem(str(var.get('data_variazione', '') or ''))); col += 1
 
                 # Informazioni Partita Origine
-                if getattr(var, 'partita_origine_id', None):
-                    num_orig = getattr(var, 'partita_origine_numero', 'N/D') or 'N/D'
-                    com_orig = getattr(var, 'comune_origine', 'N/D') or 'N/D'
+                if var.get('partita_origine_id'):
+                    num_orig = var.get('origine_numero_partita', 'N/D') or 'N/D'
+                    com_orig = var.get('origine_comune_nome', 'N/D') or 'N/D'
                     origine_text = f"N.{num_orig} ({com_orig})"
                 else:
                     origine_text = "-"
                 variazioni_table.setItem(i, col, QTableWidgetItem(origine_text)); col += 1
 
                 # Informazioni Partita Destinazione
-                if getattr(var, 'partita_destinazione_id', None):
-                    num_dest = getattr(var, 'partita_destinazione_numero', 'N/D') or 'N/D'
-                    com_dest = getattr(var, 'comune_destinazione', 'N/D') or 'N/D'
+                if var.get('partita_destinazione_id'):
+                    num_dest = var.get('destinazione_numero_partita', 'N/D') or 'N/D'
+                    com_dest = var.get('destinazione_comune_nome', 'N/D') or 'N/D'
                     dest_text = f"N.{num_dest} ({com_dest})"
                 else:
                     dest_text = "-"
                 variazioni_table.setItem(i, col, QTableWidgetItem(dest_text)); col += 1
 
                 # Contratto info
-                tipo_contratto = getattr(var, 'tipo_contratto', None)
+                tipo_contratto = var.get('tipo_contratto')
                 if tipo_contratto:
-                    contratto_text = f"{tipo_contratto} del {getattr(var, 'data_contratto', '') or ''}"
-                    notaio = getattr(var, 'notaio', None)
+                    contratto_text = f"{tipo_contratto} del {var.get('data_contratto', '') or ''}"
+                    notaio = var.get('notaio')
                     if notaio:
                         contratto_text += f" - {notaio}"
                 else:
