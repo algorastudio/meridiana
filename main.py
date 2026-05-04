@@ -284,8 +284,9 @@ if __name__ == "__main__":
             QMessageBox.critical(None, "Errore Critico", 
                                f"Si è verificato un errore critico:\n\n{str(e)}\n\n"
                                "Controlla il file catasto_gui.log per maggiori dettagli.")
-        except:
-            print(f"ERRORE CRITICO: {e}")
-            print("Controlla il file catasto_gui.log per maggiori dettagli.")
+        except Exception as ui_err:
+            sys.stderr.write(f"ERRORE CRITICO: {e}\n")
+            sys.stderr.write(f"(impossibile mostrare dialog di errore: {ui_err})\n")
+            sys.stderr.write("Controlla il file catasto_gui.log per maggiori dettagli.\n")
         
         sys.exit(1)

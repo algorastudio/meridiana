@@ -5627,8 +5627,8 @@ class EulaDialog(QDialog):
             try:
                 eula_path_1 = get_resource_path(os.path.join("resources", "EULA.txt"))
                 possible_paths.append(eula_path_1)
-            except:
-                pass
+            except Exception as e:
+                logging.getLogger("CatastoGUI").debug(f"get_resource_path non disponibile per EULA: {e}")
             
             # Percorso 2: Relativo all'eseguibile
             if getattr(sys, 'frozen', False):

@@ -62,12 +62,9 @@ class BaseDBManager:
         self.application_name = application_name
         self._min_conn_pool = min_conn
         self._max_conn_pool = max_conn
-        # --- AGGIUNGERE QUESTA RIGA ---
-        self.last_connection_error = None # Per memorizzare i dettagli dell'ultimo errore
-        # -----------------------------
+        self.last_connection_error = None
 
         self.logger = logging.getLogger(f"CatastoDB_{dbname}_{host}_{port}")
-        # ... (resto della configurazione del logger come prima) ...
         self.logger.info(f"Inizializzato gestore DB (parametri memorizzati) per {dbname}@{host}")
         self.pool = None # Il pool viene inizializzato esplicitamente dopo
         self._loc_tipo_migrated_cache: Optional[bool] = None  # lazy, see _loc_tipo_migrated
@@ -116,7 +113,6 @@ class BaseDBManager:
                 f"LEFT JOIN {self.schema}.tipo_localita tl ON {alias}.tipo_id = tl.id"
             )
         return (f"{alias}.tipo AS tipo", "")
-    # In catasto_db_manager.py, SOSTITUISCI il metodo initialize_main_pool con questo:
 
     def check_connection_alive(self):
         if not self.pool:
@@ -383,7 +379,7 @@ class BaseDBManager:
             return params_copy
         self.logger.warning("Tentativo di accesso ai parametri di connessione fallito: _main_db_conn_params non definito.")
         return {}
-    # --- AGGIUNGERE QUESTO NUOVO METODO ALLA CLASSE ---
+
     def get_last_connect_error_details(self) -> Optional[Dict[str, str]]:
         """Restituisce i dettagli dell'ultimo errore di connessione occorso."""
         return self.last_connection_error

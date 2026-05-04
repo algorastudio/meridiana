@@ -376,8 +376,8 @@ class MainWindowActionsMixin:
             try:
                 manual_path_1 = get_resource_path(os.path.join("resources", "manuale_utente.pdf"))
                 possible_paths.append(manual_path_1)
-            except:
-                pass
+            except Exception as e:
+                self.logger.debug(f"get_resource_path non disponibile per il manuale: {e}")
             
             # Percorso 2: Relativo all'eseguibile
             if getattr(sys, 'frozen', False):
