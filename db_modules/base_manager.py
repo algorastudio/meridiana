@@ -62,15 +62,57 @@ class BaseDBManager:
         self.application_name = application_name
         self._min_conn_pool = min_conn
         self._max_conn_pool = max_conn
-        # --- AGGIUNGERE QUESTA RIGA ---
-        self.last_connection_error = None # Per memorizzare i dettagli dell'ultimo errore
-        # -----------------------------
+        self.last_connection_error = None
 
         self.logger = logging.getLogger(f"CatastoDB_{dbname}_{host}_{port}")
-        # ... (resto della configurazione del logger come prima) ...
         self.logger.info(f"Inizializzato gestore DB (parametri memorizzati) per {dbname}@{host}")
         self.pool = None # Il pool viene inizializzato esplicitamente dopo
-    # In catasto_db_manager.py, SOSTITUISCI il metodo initialize_main_pool con questo:
+        self._loc_tipo_migrated_cache: Optional[bool] = None  # lazy, see _loc_tipo_migrated
+
+    @property
+    def _loc_tipo_migrated(self) -> bool:
+        """True se localita.tipo_id esiste (migrazione 20 applicata). Risultato cachato.
+        Se il pool non era pronto al primo check (False per timeout), riprova finche'
+        il pool e' disponibile per evitare di bloccarsi sul risultato sbagliato."""
+        if self._loc_tipo_migrated_cache is None or (
+                not self._loc_tipo_migrated_cache and self.pool is not None):
+            result = self._detect_localita_schema()
+            if result or self.pool is not None:
+                self._loc_tipo_migrated_cache = result
+                if not result:
+                    self.logger.warning(
+                        "Schema legacy: localita.tipo_id non esiste. "
+                        "Eseguire sql_scripts/20_feature_tipi_localita.sql per migrare il DB.")
+        return bool(self._loc_tipo_migrated_cache)
+
+    def _detect_localita_schema(self) -> bool:
+        """Controlla via information_schema se localita.tipo_id esiste."""
+        query = """
+            SELECT COUNT(*) FROM information_schema.columns
+            WHERE table_schema = %s AND table_name = 'localita' AND column_name = 'tipo_id';
+        """
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query, (self.schema,))
+                    row = cur.fetchone()
+                    return (row[0] if row else 0) > 0
+        except Exception as e:
+            self.logger.warning(f"Impossibile rilevare schema localita: {e}. Assumo schema legacy.")
+            return False
+
+    def _tipo_join(self, alias: str = 'l') -> tuple:
+        """
+        Restituisce (colonna_select, clausola_join) compatibile con lo schema attuale.
+        Schema migrato -> JOIN a tipo_localita, colonna tl.nome
+        Schema legacy  -> nessun JOIN, colonna alias.tipo (testo)
+        """
+        if self._loc_tipo_migrated:
+            return (
+                "tl.nome AS tipo",
+                f"LEFT JOIN {self.schema}.tipo_localita tl ON {alias}.tipo_id = tl.id"
+            )
+        return (f"{alias}.tipo AS tipo", "")
 
     def check_connection_alive(self):
         if not self.pool:
@@ -337,7 +379,7 @@ class BaseDBManager:
             return params_copy
         self.logger.warning("Tentativo di accesso ai parametri di connessione fallito: _main_db_conn_params non definito.")
         return {}
-    # --- AGGIUNGERE QUESTO NUOVO METODO ALLA CLASSE ---
+
     def get_last_connect_error_details(self) -> Optional[Dict[str, str]]:
         """Restituisce i dettagli dell'ultimo errore di connessione occorso."""
         return self.last_connection_error

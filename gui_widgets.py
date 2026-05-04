@@ -180,15 +180,15 @@ class ElencoComuniWidget(LazyLoadedWidget):
             self.logger.info(f">>> Inizio ciclo FOR per popolare la tabella con {len(comuni_list)} elementi.")
             self.comuni_table.setRowCount(len(comuni_list))
             for row_idx, comune in enumerate(comuni_list):
-                self.comuni_table.setItem(row_idx, 0, QTableWidgetItem(str(comune.get('id', ''))))
-                self.comuni_table.setItem(row_idx, 1, QTableWidgetItem(comune.get('nome_comune', '')))
-                self.comuni_table.setItem(row_idx, 2, QTableWidgetItem(comune.get('codice_catastale', '')))
-                self.comuni_table.setItem(row_idx, 3, QTableWidgetItem(comune.get('provincia', '')))
-                data_ist = comune.get('data_istituzione')
+                self.comuni_table.setItem(row_idx, 0, QTableWidgetItem(str(getattr(comune, 'id', ''))))
+                self.comuni_table.setItem(row_idx, 1, QTableWidgetItem(getattr(comune, 'nome_comune', '') or ''))
+                self.comuni_table.setItem(row_idx, 2, QTableWidgetItem(getattr(comune, 'codice_catastale', '') or ''))
+                self.comuni_table.setItem(row_idx, 3, QTableWidgetItem(getattr(comune, 'provincia', '') or ''))
+                data_ist = getattr(comune, 'data_istituzione', None)
                 self.comuni_table.setItem(row_idx, 4, QTableWidgetItem(str(data_ist) if data_ist else ''))
-                data_soppr = comune.get('data_soppressione')
+                data_soppr = getattr(comune, 'data_soppressione', None)
                 self.comuni_table.setItem(row_idx, 5, QTableWidgetItem(str(data_soppr) if data_soppr else ''))
-                self.comuni_table.setItem(row_idx, 6, QTableWidgetItem(comune.get('note', '')))
+                self.comuni_table.setItem(row_idx, 6, QTableWidgetItem(getattr(comune, 'note', '') or ''))
             
             self.comuni_table.resizeColumnsToContents()
             self.logger.info(">>> Fine ciclo FOR.")
@@ -663,17 +663,16 @@ class RicercaPartiteWidget(QWidget):
                 self.results_table.setRowCount(len(partite))
                 # Usa nomi variabili chiari
                 for row_idx, partita_data in enumerate(partite):
-                    # Popolamento tabella come da suo codice esistente
                     self.results_table.setItem(
                         row_idx, 0, QTableWidgetItem(str(partita_data.get('id', ''))))
                     self.results_table.setItem(row_idx, 1, QTableWidgetItem(
-                        partita_data.get('comune_nome', '')))
+                        partita_data.get('comune_nome', '') or ''))
                     self.results_table.setItem(row_idx, 2, QTableWidgetItem(
                         str(partita_data.get('numero_partita', ''))))
                     self.results_table.setItem(
-                        row_idx, 3, QTableWidgetItem(partita_data.get('tipo', '')))
+                        row_idx, 3, QTableWidgetItem(partita_data.get('tipo', '') or ''))
                     self.results_table.setItem(
-                        row_idx, 4, QTableWidgetItem(partita_data.get('stato', '')))
+                        row_idx, 4, QTableWidgetItem(partita_data.get('stato', '') or ''))
                 self.results_table.resizeColumnsToContents()  # Adatta le colonne al contenuto
                 QMessageBox.information(
                     self, "Ricerca Completata", f"Trovate {len(partite)} partite corrispondenti ai criteri.")
@@ -988,38 +987,42 @@ class RicercaAvanzataImmobiliWidget(QWidget):
                     len(immobili_trovati))
                 for row_idx, immobile in enumerate(immobili_trovati):
                     col = 0
+                    id_imm = getattr(immobile, 'id_immobile', None) or getattr(immobile, 'id', None)
                     self.risultati_immobili_table.setItem(
-                        row_idx, col, QTableWidgetItem(str(immobile.get('id_immobile', ''))))
+                        row_idx, col, QTableWidgetItem(str(id_imm if id_imm is not None else '')))
                     col += 1
                     self.risultati_immobili_table.setItem(
-                        row_idx, col, QTableWidgetItem(str(immobile.get('numero_partita', ''))))
+                        row_idx, col, QTableWidgetItem(str(getattr(immobile, 'numero_partita', '') or '')))
                     col += 1
                     self.risultati_immobili_table.setItem(
-                        row_idx, col, QTableWidgetItem(immobile.get('comune_nome', '')))
+                        row_idx, col, QTableWidgetItem(getattr(immobile, 'comune_nome', '') or ''))
                     col += 1
-                    localita_display = f"{immobile.get('localita_nome', '')}"
-                    if immobile.get('localita_tipo'):
-                        localita_display += f" ({immobile.get('localita_tipo')})"
+                    localita_display = f"{getattr(immobile, 'localita_nome', '') or ''}"
+                    loc_tipo = getattr(immobile, 'localita_tipo', None)
+                    if loc_tipo:
+                        localita_display += f" ({loc_tipo})"
                     self.risultati_immobili_table.setItem(
                         row_idx, col, QTableWidgetItem(localita_display.strip()))
                     col += 1
                     self.risultati_immobili_table.setItem(
-                        row_idx, col, QTableWidgetItem(immobile.get('natura', '')))
+                        row_idx, col, QTableWidgetItem(getattr(immobile, 'natura', '') or ''))
                     col += 1
                     self.risultati_immobili_table.setItem(
-                        row_idx, col, QTableWidgetItem(immobile.get('classificazione', '')))
+                        row_idx, col, QTableWidgetItem(getattr(immobile, 'classificazione', '') or ''))
                     col += 1
                     self.risultati_immobili_table.setItem(
-                        row_idx, col, QTableWidgetItem(immobile.get('consistenza', '')))
+                        row_idx, col, QTableWidgetItem(getattr(immobile, 'consistenza', '') or ''))
                     col += 1
-                    self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(str(
-                        immobile.get('numero_piani', '')) if immobile.get('numero_piani') is not None else ''))
+                    n_piani = getattr(immobile, 'numero_piani', None)
+                    self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(
+                        str(n_piani) if n_piani is not None else ''))
                     col += 1
-                    self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(str(
-                        immobile.get('numero_vani', '')) if immobile.get('numero_vani') is not None else ''))
+                    n_vani = getattr(immobile, 'numero_vani', None)
+                    self.risultati_immobili_table.setItem(row_idx, col, QTableWidgetItem(
+                        str(n_vani) if n_vani is not None else ''))
                     col += 1
                     self.risultati_immobili_table.setItem(
-                        row_idx, col, QTableWidgetItem(immobile.get('possessori_attuali', '')))
+                        row_idx, col, QTableWidgetItem(getattr(immobile, 'possessori_attuali', '') or ''))
                     col += 1  # Campo dalla funzione SQL
 
                 # self.risultati_immobili_table.resizeColumnsToContents() # Potrebbe essere lento con molti dati
@@ -1816,9 +1819,9 @@ class InserimentoLocalitaWidget(QWidget):
                 return
             self.localita_table.setRowCount(len(localita_list))
             for i, loc in enumerate(localita_list):
-                self.localita_table.setItem(i, 0, QTableWidgetItem(str(loc.get('id', ''))))
-                self.localita_table.setItem(i, 1, QTableWidgetItem(loc.get('nome', '') or ''))
-                self.localita_table.setItem(i, 2, QTableWidgetItem(loc.get('tipo', '') or ''))
+                self.localita_table.setItem(i, 0, QTableWidgetItem(str(getattr(loc, 'id', ''))))
+                self.localita_table.setItem(i, 1, QTableWidgetItem(getattr(loc, 'nome', '') or ''))
+                self.localita_table.setItem(i, 2, QTableWidgetItem(getattr(loc, 'tipo', '') or ''))
             self.localita_table.resizeColumnsToContents()
         except Exception as e:
             logging.getLogger("CatastoGUI").error(
@@ -2140,8 +2143,9 @@ class _PossessoriPage(QWizardPage):
         self._combo.clear()
         self._combo.addItem("— Seleziona —", None)
         for p in self._wiz.possessori_cache:
+            label_comune = getattr(p, 'comune_riferimento_nome', None) or getattr(p, 'comune_nome', '') or ''
             self._combo.addItem(
-                f"{p['nome_completo']}  ({p['comune_riferimento_nome']})", p['id'])
+                f"{getattr(p, 'nome_completo', '')}  ({label_comune})", getattr(p, 'id', None))
 
     def _add_selected(self):
         pid = self._combo.currentData()
@@ -2274,14 +2278,14 @@ class _ImmobiliPage(QWizardPage):
         self._imm_combo.addItem("— Cerca Immobile Esistente —", None)
         for imm in self._wiz.immobili_cache:
             self._imm_combo.addItem(
-                f"{imm['natura']} in {imm['localita_nome']}", imm['id'])
+                f"{getattr(imm, 'natura', '')} in {getattr(imm, 'localita_nome', '')}", getattr(imm, 'id', None))
         self._imm_combo.setEnabled(bool(self._wiz.immobili_cache))
 
         self._loc_combo.clear()
         self._loc_combo.addItem("— Seleziona Località —", None)
         for loc in self._wiz.localita_cache:
             self._loc_combo.addItem(
-                f"{loc['nome']}  ({loc.get('tipo', 'N/D')})", loc['id'])
+                f"{getattr(loc, 'nome', '')}  ({getattr(loc, 'tipo', 'N/D') or 'N/D'})", getattr(loc, 'id', None))
         self._loc_combo.setEnabled(bool(self._wiz.localita_cache))
 
     def _add_existing(self):
@@ -2292,9 +2296,18 @@ class _ImmobiliPage(QWizardPage):
         if any(i.get('id') == imm_id for i in self._wiz.immobili_data):
             return QMessageBox.information(self, "Già Presente",
                                            "Questo immobile è già nella lista.")
-        details = next((i for i in self._wiz.immobili_cache if i['id'] == imm_id), None)
+        details = next((i for i in self._wiz.immobili_cache if getattr(i, 'id', None) == imm_id), None)
         if details:
-            self._wiz.immobili_data.append(details)
+            self._wiz.immobili_data.append({
+                'id': getattr(details, 'id', None),
+                'natura': getattr(details, 'natura', '') or '',
+                'localita_id': getattr(details, 'localita_id', None),
+                'localita_nome': getattr(details, 'localita_nome', '') or '',
+                'classificazione': getattr(details, 'classificazione', '') or '',
+                'consistenza': getattr(details, 'consistenza', '') or '',
+                'numero_piani': getattr(details, 'numero_piani', None),
+                'numero_vani': getattr(details, 'numero_vani', None),
+            })
             self._refresh_table()
 
     def _add_inline(self):
@@ -2931,11 +2944,10 @@ class OperazioniPartitaWidget(QWidget):
         partita_details = self.db_manager.get_partita_details(partita_id_dest)
 
         if partita_details:
-            stato = partita_details.get('stato')
-            comune = partita_details.get('comune_nome', 'N/D')
-            numero = partita_details.get('numero_partita', 'N/D')
-            # --- AGGIUNTA LETTURA SUFFISSO ---
-            suffisso = partita_details.get('suffisso_partita')
+            stato = getattr(partita_details, 'stato', None)
+            comune = getattr(partita_details, 'comune_nome', 'N/D') or 'N/D'
+            numero = getattr(partita_details, 'numero_partita', 'N/D')
+            suffisso = getattr(partita_details, 'suffisso_partita', None)
             suffisso_display = f" (suffisso: {suffisso})" if suffisso else ""
 
             if self.selected_partita_id_source is not None and partita_id_dest == self.selected_partita_id_source:
@@ -3085,16 +3097,14 @@ class OperazioniPartitaWidget(QWidget):
             partita_details = self.db_manager.get_partita_details(
                 self.selected_partita_id_source)
             if partita_details:
-                self.selected_partita_comune_id_source = partita_details.get(
-                    'comune_id')  # Salva per uso futuro
-                self.selected_partita_comune_nome_source = partita_details.get(
-                    'comune_nome', 'N/D')
+                self.selected_partita_comune_id_source = getattr(partita_details, 'comune_id', None)
+                self.selected_partita_comune_nome_source = getattr(partita_details, 'comune_nome', 'N/D') or 'N/D'
 
                 self.source_partita_info_label.setText(
-                    f"Partita Sorgente: N. {partita_details.get('numero_partita')} "
+                    f"Partita Sorgente: N. {getattr(partita_details, 'numero_partita', '')} "
                     f"(Comune: {self.selected_partita_comune_nome_source} [ID: {self.selected_partita_comune_id_source}], Partita ID: {self.selected_partita_id_source})"
                 )
-                immobili = partita_details.get('immobili', [])
+                immobili = getattr(partita_details, 'immobili', [])
 
                 # Popola la tabella immobili nel tab "Trasferisci Immobile"
                 if hasattr(self, '_carica_immobili_partita_sorgente'):
@@ -4233,8 +4243,9 @@ class ReportisticaWidget(LazyLoadedWidget):
         
         details = self.db_manager.get_partita_details(partita_id)
         if details:
-            suffisso_str = f"(Suffisso: {details.get('suffisso_partita')})" if details.get('suffisso_partita') else "(Nessun Suffisso)"
-            label_widget.setText(f"Selezionata: N. {details.get('numero_partita')} {suffisso_str} - Comune: {details.get('comune_nome')}")
+            suf = getattr(details, 'suffisso_partita', None)
+            suffisso_str = f"(Suffisso: {suf})" if suf else "(Nessun Suffisso)"
+            label_widget.setText(f"Selezionata: N. {getattr(details, 'numero_partita', '')} {suffisso_str} - Comune: {getattr(details, 'comune_nome', '')}")
         else:
             label_widget.setText(f"<font color='red'>Partita ID {partita_id} non trovata.</font>")
 
@@ -4253,7 +4264,7 @@ class ReportisticaWidget(LazyLoadedWidget):
     def search_possessore(self):
         dialog = PossessoreSelectionDialog(db_manager=self.db_manager, comune_id=None, parent=self)
         if dialog.exec_() == QDialog.Accepted and dialog.selected_possessore:
-            self.possessore_id_edit.setValue(dialog.selected_possessore.get('id', 0))
+            self.possessore_id_edit.setValue(getattr(dialog.selected_possessore, 'id', 0))
 
     def generate_report_proprieta(self):
         partita_id = self.partita_id_edit.value()
