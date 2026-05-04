@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-acs/core/__pycache__/models.cpython-313.pyc
-=======
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -126,4 +123,8 @@ secrets.json
 *.xlsx
 *.ppt
 *.pptx
->>>>>>> 0a923e6492c945930ac2ff2dbc5aa05398eb22c0
+
+# Generated artifacts (output esportazioni, dump DB, output test)
+*.dump
+tests_output.txt
+dettaglio_partita_*.pdf
