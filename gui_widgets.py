@@ -663,17 +663,16 @@ class RicercaPartiteWidget(QWidget):
                 self.results_table.setRowCount(len(partite))
                 # Usa nomi variabili chiari
                 for row_idx, partita_data in enumerate(partite):
-                    # Popolamento tabella come da suo codice esistente
                     self.results_table.setItem(
-                        row_idx, 0, QTableWidgetItem(str(partita_data.get('id', ''))))
+                        row_idx, 0, QTableWidgetItem(str(getattr(partita_data, 'id', ''))))
                     self.results_table.setItem(row_idx, 1, QTableWidgetItem(
-                        partita_data.get('comune_nome', '')))
+                        getattr(partita_data, 'comune_nome', '') or ''))
                     self.results_table.setItem(row_idx, 2, QTableWidgetItem(
-                        str(partita_data.get('numero_partita', ''))))
+                        str(getattr(partita_data, 'numero_partita', ''))))
                     self.results_table.setItem(
-                        row_idx, 3, QTableWidgetItem(partita_data.get('tipo', '')))
+                        row_idx, 3, QTableWidgetItem(getattr(partita_data, 'tipo', '') or ''))
                     self.results_table.setItem(
-                        row_idx, 4, QTableWidgetItem(partita_data.get('stato', '')))
+                        row_idx, 4, QTableWidgetItem(getattr(partita_data, 'stato', '') or ''))
                 self.results_table.resizeColumnsToContents()  # Adatta le colonne al contenuto
                 QMessageBox.information(
                     self, "Ricerca Completata", f"Trovate {len(partite)} partite corrispondenti ai criteri.")
@@ -2945,11 +2944,10 @@ class OperazioniPartitaWidget(QWidget):
         partita_details = self.db_manager.get_partita_details(partita_id_dest)
 
         if partita_details:
-            stato = partita_details.get('stato')
-            comune = partita_details.get('comune_nome', 'N/D')
-            numero = partita_details.get('numero_partita', 'N/D')
-            # --- AGGIUNTA LETTURA SUFFISSO ---
-            suffisso = partita_details.get('suffisso_partita')
+            stato = getattr(partita_details, 'stato', None)
+            comune = getattr(partita_details, 'comune_nome', 'N/D') or 'N/D'
+            numero = getattr(partita_details, 'numero_partita', 'N/D')
+            suffisso = getattr(partita_details, 'suffisso_partita', None)
             suffisso_display = f" (suffisso: {suffisso})" if suffisso else ""
 
             if self.selected_partita_id_source is not None and partita_id_dest == self.selected_partita_id_source:
@@ -3099,16 +3097,14 @@ class OperazioniPartitaWidget(QWidget):
             partita_details = self.db_manager.get_partita_details(
                 self.selected_partita_id_source)
             if partita_details:
-                self.selected_partita_comune_id_source = partita_details.get(
-                    'comune_id')  # Salva per uso futuro
-                self.selected_partita_comune_nome_source = partita_details.get(
-                    'comune_nome', 'N/D')
+                self.selected_partita_comune_id_source = getattr(partita_details, 'comune_id', None)
+                self.selected_partita_comune_nome_source = getattr(partita_details, 'comune_nome', 'N/D') or 'N/D'
 
                 self.source_partita_info_label.setText(
-                    f"Partita Sorgente: N. {partita_details.get('numero_partita')} "
+                    f"Partita Sorgente: N. {getattr(partita_details, 'numero_partita', '')} "
                     f"(Comune: {self.selected_partita_comune_nome_source} [ID: {self.selected_partita_comune_id_source}], Partita ID: {self.selected_partita_id_source})"
                 )
-                immobili = partita_details.get('immobili', [])
+                immobili = getattr(partita_details, 'immobili', [])
 
                 # Popola la tabella immobili nel tab "Trasferisci Immobile"
                 if hasattr(self, '_carica_immobili_partita_sorgente'):
@@ -4247,8 +4243,9 @@ class ReportisticaWidget(LazyLoadedWidget):
         
         details = self.db_manager.get_partita_details(partita_id)
         if details:
-            suffisso_str = f"(Suffisso: {details.get('suffisso_partita')})" if details.get('suffisso_partita') else "(Nessun Suffisso)"
-            label_widget.setText(f"Selezionata: N. {details.get('numero_partita')} {suffisso_str} - Comune: {details.get('comune_nome')}")
+            suf = getattr(details, 'suffisso_partita', None)
+            suffisso_str = f"(Suffisso: {suf})" if suf else "(Nessun Suffisso)"
+            label_widget.setText(f"Selezionata: N. {getattr(details, 'numero_partita', '')} {suffisso_str} - Comune: {getattr(details, 'comune_nome', '')}")
         else:
             label_widget.setText(f"<font color='red'>Partita ID {partita_id} non trovata.</font>")
 
@@ -4267,7 +4264,7 @@ class ReportisticaWidget(LazyLoadedWidget):
     def search_possessore(self):
         dialog = PossessoreSelectionDialog(db_manager=self.db_manager, comune_id=None, parent=self)
         if dialog.exec_() == QDialog.Accepted and dialog.selected_possessore:
-            self.possessore_id_edit.setValue(dialog.selected_possessore.get('id', 0))
+            self.possessore_id_edit.setValue(getattr(dialog.selected_possessore, 'id', 0))
 
     def generate_report_proprieta(self):
         partita_id = self.partita_id_edit.value()
