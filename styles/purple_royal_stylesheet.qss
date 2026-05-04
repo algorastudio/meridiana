@@ -36,7 +36,7 @@ QLineEdit:focus, QTextEdit:focus, QSpinBox:focus,
 QDoubleSpinBox:focus, QDateEdit:focus, QDateTimeEdit:focus, QComboBox:focus {
     border: 2px solid #7B1FA2;
     background-color: #F8E8FF;
-    box-shadow: 0 0 0 3px rgba(123, 31, 162, 0.15);
+    /* box-shadow: 0 0 0 3px rgba(123, 31, 162, 0.15); not supported in Qt */
 }
 
 QLineEdit[readOnly="true"], QTextEdit[readOnly="true"] {
