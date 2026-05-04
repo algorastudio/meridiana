@@ -664,15 +664,15 @@ class RicercaPartiteWidget(QWidget):
                 # Usa nomi variabili chiari
                 for row_idx, partita_data in enumerate(partite):
                     self.results_table.setItem(
-                        row_idx, 0, QTableWidgetItem(str(getattr(partita_data, 'id', ''))))
+                        row_idx, 0, QTableWidgetItem(str(partita_data.get('id', ''))))
                     self.results_table.setItem(row_idx, 1, QTableWidgetItem(
-                        getattr(partita_data, 'comune_nome', '') or ''))
+                        partita_data.get('comune_nome', '') or ''))
                     self.results_table.setItem(row_idx, 2, QTableWidgetItem(
-                        str(getattr(partita_data, 'numero_partita', ''))))
+                        str(partita_data.get('numero_partita', ''))))
                     self.results_table.setItem(
-                        row_idx, 3, QTableWidgetItem(getattr(partita_data, 'tipo', '') or ''))
+                        row_idx, 3, QTableWidgetItem(partita_data.get('tipo', '') or ''))
                     self.results_table.setItem(
-                        row_idx, 4, QTableWidgetItem(getattr(partita_data, 'stato', '') or ''))
+                        row_idx, 4, QTableWidgetItem(partita_data.get('stato', '') or ''))
                 self.results_table.resizeColumnsToContents()  # Adatta le colonne al contenuto
                 QMessageBox.information(
                     self, "Ricerca Completata", f"Trovate {len(partite)} partite corrispondenti ai criteri.")
