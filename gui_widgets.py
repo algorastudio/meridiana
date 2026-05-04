@@ -180,15 +180,15 @@ class ElencoComuniWidget(LazyLoadedWidget):
             self.logger.info(f">>> Inizio ciclo FOR per popolare la tabella con {len(comuni_list)} elementi.")
             self.comuni_table.setRowCount(len(comuni_list))
             for row_idx, comune in enumerate(comuni_list):
-                self.comuni_table.setItem(row_idx, 0, QTableWidgetItem(str(comune.get('id', ''))))
-                self.comuni_table.setItem(row_idx, 1, QTableWidgetItem(comune.get('nome_comune', '')))
-                self.comuni_table.setItem(row_idx, 2, QTableWidgetItem(comune.get('codice_catastale', '')))
-                self.comuni_table.setItem(row_idx, 3, QTableWidgetItem(comune.get('provincia', '')))
-                data_ist = comune.get('data_istituzione')
+                self.comuni_table.setItem(row_idx, 0, QTableWidgetItem(str(getattr(comune, 'id', ''))))
+                self.comuni_table.setItem(row_idx, 1, QTableWidgetItem(getattr(comune, 'nome_comune', '') or ''))
+                self.comuni_table.setItem(row_idx, 2, QTableWidgetItem(getattr(comune, 'codice_catastale', '') or ''))
+                self.comuni_table.setItem(row_idx, 3, QTableWidgetItem(getattr(comune, 'provincia', '') or ''))
+                data_ist = getattr(comune, 'data_istituzione', None)
                 self.comuni_table.setItem(row_idx, 4, QTableWidgetItem(str(data_ist) if data_ist else ''))
-                data_soppr = comune.get('data_soppressione')
+                data_soppr = getattr(comune, 'data_soppressione', None)
                 self.comuni_table.setItem(row_idx, 5, QTableWidgetItem(str(data_soppr) if data_soppr else ''))
-                self.comuni_table.setItem(row_idx, 6, QTableWidgetItem(comune.get('note', '')))
+                self.comuni_table.setItem(row_idx, 6, QTableWidgetItem(getattr(comune, 'note', '') or ''))
             
             self.comuni_table.resizeColumnsToContents()
             self.logger.info(">>> Fine ciclo FOR.")
@@ -1820,9 +1820,9 @@ class InserimentoLocalitaWidget(QWidget):
                 return
             self.localita_table.setRowCount(len(localita_list))
             for i, loc in enumerate(localita_list):
-                self.localita_table.setItem(i, 0, QTableWidgetItem(str(loc.get('id', ''))))
-                self.localita_table.setItem(i, 1, QTableWidgetItem(loc.get('nome', '') or ''))
-                self.localita_table.setItem(i, 2, QTableWidgetItem(loc.get('tipo', '') or ''))
+                self.localita_table.setItem(i, 0, QTableWidgetItem(str(getattr(loc, 'id', ''))))
+                self.localita_table.setItem(i, 1, QTableWidgetItem(getattr(loc, 'nome', '') or ''))
+                self.localita_table.setItem(i, 2, QTableWidgetItem(getattr(loc, 'tipo', '') or ''))
             self.localita_table.resizeColumnsToContents()
         except Exception as e:
             logging.getLogger("CatastoGUI").error(
@@ -2278,14 +2278,14 @@ class _ImmobiliPage(QWizardPage):
         self._imm_combo.addItem("— Cerca Immobile Esistente —", None)
         for imm in self._wiz.immobili_cache:
             self._imm_combo.addItem(
-                f"{imm['natura']} in {imm['localita_nome']}", imm['id'])
+                f"{getattr(imm, 'natura', '')} in {getattr(imm, 'localita_nome', '')}", getattr(imm, 'id', None))
         self._imm_combo.setEnabled(bool(self._wiz.immobili_cache))
 
         self._loc_combo.clear()
         self._loc_combo.addItem("— Seleziona Località —", None)
         for loc in self._wiz.localita_cache:
             self._loc_combo.addItem(
-                f"{loc['nome']}  ({loc.get('tipo', 'N/D')})", loc['id'])
+                f"{getattr(loc, 'nome', '')}  ({getattr(loc, 'tipo', 'N/D') or 'N/D'})", getattr(loc, 'id', None))
         self._loc_combo.setEnabled(bool(self._wiz.localita_cache))
 
     def _add_existing(self):
