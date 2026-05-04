@@ -2297,9 +2297,18 @@ class _ImmobiliPage(QWizardPage):
         if any(i.get('id') == imm_id for i in self._wiz.immobili_data):
             return QMessageBox.information(self, "Già Presente",
                                            "Questo immobile è già nella lista.")
-        details = next((i for i in self._wiz.immobili_cache if i['id'] == imm_id), None)
+        details = next((i for i in self._wiz.immobili_cache if getattr(i, 'id', None) == imm_id), None)
         if details:
-            self._wiz.immobili_data.append(details)
+            self._wiz.immobili_data.append({
+                'id': getattr(details, 'id', None),
+                'natura': getattr(details, 'natura', '') or '',
+                'localita_id': getattr(details, 'localita_id', None),
+                'localita_nome': getattr(details, 'localita_nome', '') or '',
+                'classificazione': getattr(details, 'classificazione', '') or '',
+                'consistenza': getattr(details, 'consistenza', '') or '',
+                'numero_piani': getattr(details, 'numero_piani', None),
+                'numero_vani': getattr(details, 'numero_vani', None),
+            })
             self._refresh_table()
 
     def _add_inline(self):
