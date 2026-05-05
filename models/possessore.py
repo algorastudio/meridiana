@@ -1,9 +1,10 @@
 from dataclasses import dataclass, field
 from typing import Optional, Any, List
 from datetime import datetime
+from models.base import DictCompatMixin
 
 @dataclass
-class Possessore:
+class Possessore(DictCompatMixin):
     id: int
     nome_completo: str
     cognome_nome: str

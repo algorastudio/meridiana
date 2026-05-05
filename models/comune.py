@@ -1,9 +1,10 @@
 from dataclasses import dataclass
 from typing import Optional, Any
 from datetime import date, datetime
+from models.base import DictCompatMixin
 
 @dataclass
-class Comune:
+class Comune(DictCompatMixin):
     id: int
     nome_comune: str
     provincia: str

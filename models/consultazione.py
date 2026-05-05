@@ -1,9 +1,10 @@
 from dataclasses import dataclass, field
 from typing import Optional, Any
 from datetime import date
+from models.base import DictCompatMixin
 
 @dataclass
-class Consultazione:
+class Consultazione(DictCompatMixin):
     id: int
     data: Optional[date] = None
     richiedente: Optional[str] = None

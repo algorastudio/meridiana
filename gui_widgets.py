@@ -3333,7 +3333,7 @@ class OperazioniPartitaWidget(QWidget):
         possessore_info_completa_sel = None
         if dialog_sel_poss.exec_() == QDialog.Accepted:
             if hasattr(dialog_sel_poss, 'selected_possessore') and dialog_sel_poss.selected_possessore:
-                poss_id_sel = dialog_sel_poss.selected_possessore.get('id')
+                poss_id_sel = getattr(dialog_sel_poss.selected_possessore, 'id', None)
                 if poss_id_sel:
                     dettagli_poss_db = self.db_manager.get_possessore_full_details(
                         poss_id_sel)
@@ -3356,24 +3356,23 @@ class OperazioniPartitaWidget(QWidget):
                 "Aggiunta possessore per PP annullata (selezione/creazione).")
             return
 
-        if not possessore_info_completa_sel or possessore_info_completa_sel.get('id') is None:
+        if not possessore_info_completa_sel or getattr(possessore_info_completa_sel, 'id', None) is None:
             QMessageBox.warning(
                 self, "Errore", "Dati del possessore non validi.")
             return
 
         dettagli_leg = DettagliLegamePossessoreDialog.get_details_for_new_legame(
-            nome_possessore=possessore_info_completa_sel.get(
-                "nome_completo", "N/D"),
+            nome_possessore=getattr(possessore_info_completa_sel, "nome_completo", "N/D"),
             tipo_partita_attuale='principale', parent=self
         )
         if dettagli_leg:
             self._pp_temp_nuovi_possessori.append({
-                "possessore_id": possessore_info_completa_sel.get("id"),
-                "nome_completo": possessore_info_completa_sel.get("nome_completo"),
-                "cognome_nome": possessore_info_completa_sel.get("cognome_nome"),
-                "paternita": possessore_info_completa_sel.get("paternita"),
-                "comune_riferimento_id": possessore_info_completa_sel.get("comune_riferimento_id"),
-                "attivo": possessore_info_completa_sel.get("attivo", True),
+                "possessore_id": getattr(possessore_info_completa_sel, "id", None),
+                "nome_completo": getattr(possessore_info_completa_sel, "nome_completo", None),
+                "cognome_nome": getattr(possessore_info_completa_sel, "cognome_nome", None),
+                "paternita": getattr(possessore_info_completa_sel, "paternita", None),
+                "comune_riferimento_id": getattr(possessore_info_completa_sel, "comune_riferimento_id", None),
+                "attivo": getattr(possessore_info_completa_sel, "attivo", True),
                 "titolo": dettagli_leg["titolo"],
                 "quota": dettagli_leg["quota"]
             })
@@ -6556,8 +6555,8 @@ class UnifiedFuzzySearchWidget(QWidget):
         entity_id = self._get_entity_id_from_table(self.localita_table, index)
         if entity_id:
             localita_details = self.db_manager.get_localita_details(entity_id)
-            if localita_details and localita_details.get('comune_id'):
-                dialog = ModificaLocalitaDialog(self.db_manager, entity_id, localita_details.get('comune_id'), self)
+            if localita_details and getattr(localita_details, 'comune_id', None):
+                dialog = ModificaLocalitaDialog(self.db_manager, entity_id, getattr(localita_details, 'comune_id'), self)
                 if dialog.exec_() == QDialog.Accepted:
                     self._perform_search()
             else:
@@ -6567,10 +6566,10 @@ class UnifiedFuzzySearchWidget(QWidget):
         entity_id = self._get_entity_id_from_table(self.immobili_table, index)
         if entity_id:
             immobile_details = self.db_manager.get_immobile_details(entity_id)
-            if immobile_details and immobile_details.get('partita_id'):
-                partita_details = self.db_manager.get_partita_details(immobile_details.get('partita_id'))
-                if partita_details and partita_details.get('comune_id'):
-                    dialog = ModificaImmobileDialog(self.db_manager, entity_id, partita_details.get('comune_id'), self)
+            if immobile_details and getattr(immobile_details, 'partita_id', None):
+                partita_details = self.db_manager.get_partita_details(getattr(immobile_details, 'partita_id'))
+                if partita_details and getattr(partita_details, 'comune_id', None):
+                    dialog = ModificaImmobileDialog(self.db_manager, entity_id, getattr(partita_details, 'comune_id'), self)
                     if dialog.exec_() == QDialog.Accepted:
                         self._perform_search()
                 else:

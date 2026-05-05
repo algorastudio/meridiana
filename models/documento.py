@@ -1,8 +1,9 @@
 from dataclasses import dataclass, field
 from typing import Optional, Any
+from models.base import DictCompatMixin
 
 @dataclass
-class Documento:
+class Documento(DictCompatMixin):
     id: int
     titolo: str
     tipo_documento: str
