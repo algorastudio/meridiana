@@ -581,21 +581,21 @@ class RicercaPartiteWidget(QWidget):
         """Passa alla pagina precedente e ricarica."""
         if self.current_page > 1:
             self.current_page -= 1
-            self.load_data()
+            self._run_paginated_search()
 
     def _next_page(self):
         """Passa alla pagina successiva e ricarica."""
         import math
-        total_pages = math.ceil(self.total_records / self.page_size)
+        total_pages = math.ceil(self.total_records / self.page_size) if self.page_size else 1
         if self.current_page < total_pages:
             self.current_page += 1
-            self.load_data()
+            self._run_paginated_search()
 
     def _change_page_size(self, new_size_str):
         """Cambiando i record per pagina, si resetta alla pagina 1."""
         self.page_size = int(new_size_str)
         self.current_page = 1
-        self.load_data()
+        self._run_paginated_search()
 
     def select_comune(self):
         """Apre il selettore di comuni."""
@@ -612,92 +612,59 @@ class RicercaPartiteWidget(QWidget):
         self.comune_display.setText("Nessun comune selezionato")
 
     def do_search(self):
-        """Esegue la ricerca partite in base ai criteri."""
-        comune_id = self.comune_id
+        """Acquisisce i criteri dalla UI, resetta la pagina e avvia la ricerca paginata."""
         numero_partita_val = self.numero_edit.value()
-        numero_partita = numero_partita_val if numero_partita_val > 0 and self.numero_edit.text(
-        ) != self.numero_edit.specialValueText() else None
+        numero_partita = (
+            numero_partita_val
+            if numero_partita_val > 0
+            and self.numero_edit.text() != self.numero_edit.specialValueText()
+            else None
+        )
+        self._search_criteria = {
+            "comune_id": self.comune_id,
+            "numero_partita": numero_partita,
+            "possessore": self.possessore_edit.text().strip() or None,
+            "immobile_natura": self.natura_edit.text().strip() or None,
+        }
+        self.current_page = 1
+        self._run_paginated_search(notify_no_results=True)
 
-        possessore = self.possessore_edit.text().strip() or None
-        natura = self.natura_edit.text().strip() or None
+    def _run_paginated_search(self, notify_no_results: bool = False):
+        """Esegue la query paginata con i criteri correnti e popola la tabella."""
+        if not hasattr(self, "_search_criteria") or self._search_criteria is None:
+            return
 
-        # --- Stampa di DEBUG dei parametri inviati ---
-        logging.getLogger("CatastoGUI").debug(
-            f"RicercaPartiteWidget.do_search - Parametri inviati al DBManager:")
-        logging.getLogger("CatastoGUI").debug(
-            f"  comune_id: {comune_id} (tipo: {type(comune_id)})")
-        logging.getLogger("CatastoGUI").debug(
-            f"  numero_partita: {numero_partita} (tipo: {type(numero_partita)})")
-        logging.getLogger("CatastoGUI").debug(
-            f"  possessore: '{possessore}' (tipo: {type(possessore)})")
-        logging.getLogger("CatastoGUI").debug(
-            f"  immobile_natura: '{natura}' (tipo: {type(natura)})")
-        # --- Fine Stampa di DEBUG ---
-
+        offset = (self.current_page - 1) * self.page_size
         try:
-            partite = self.db_manager.search_partite(
-                comune_id=comune_id,
-                numero_partita=numero_partita,
-                possessore=possessore,
-                immobile_natura=natura
+            partite, total = self.db_manager.search_partite_paginate(
+                limit=self.page_size,
+                offset=offset,
+                **self._search_criteria,
             )
-
-            # --- Stampa di DEBUG dei risultati ricevuti ---
-            logging.getLogger("CatastoGUI").debug(
-                f"RicercaPartiteWidget.do_search - Risultati ricevuti dal DBManager (tipo: {type(partite)}):")
-            if partite is not None:  # Controlla se partite è None prima di len()
-                logging.getLogger("CatastoGUI").debug(
-                    f"  Numero di partite ricevute: {len(partite)}")
-                # Se vuoi vedere i primi risultati per debug (attenzione con dati sensibili):
-                # for i, p_item in enumerate(partite[:3]): # Logga al massimo i primi 3
-                #    logging.getLogger("CatastoGUI").debug(f"    Partita {i}: {p_item}")
-            else:
-                logging.getLogger("CatastoGUI").debug(
-                    "  Nessun risultato (variabile 'partite' è None).")
-            # --- Fine Stampa di DEBUG ---
-
-            # Pulisce la tabella prima di popolarla
-            self.results_table.setRowCount(0)
-
-            if partite:  # Verifica se la lista 'partite' non è vuota
-                self.results_table.setRowCount(len(partite))
-                # Usa nomi variabili chiari
-                for row_idx, partita_data in enumerate(partite):
-                    self.results_table.setItem(
-                        row_idx, 0, QTableWidgetItem(str(partita_data.get('id', ''))))
-                    self.results_table.setItem(row_idx, 1, QTableWidgetItem(
-                        partita_data.get('comune_nome', '') or ''))
-                    self.results_table.setItem(row_idx, 2, QTableWidgetItem(
-                        str(partita_data.get('numero_partita', ''))))
-                    self.results_table.setItem(
-                        row_idx, 3, QTableWidgetItem(partita_data.get('tipo', '') or ''))
-                    self.results_table.setItem(
-                        row_idx, 4, QTableWidgetItem(partita_data.get('stato', '') or ''))
-                self.results_table.resizeColumnsToContents()  # Adatta le colonne al contenuto
-                QMessageBox.information(
-                    self, "Ricerca Completata", f"Trovate {len(partite)} partite corrispondenti ai criteri.")
-            else:
-                logging.getLogger("CatastoGUI").info(
-                    "RicercaPartiteWidget.do_search - Nessuna partita trovata o la lista risultati è vuota.")
-                QMessageBox.information(
-                    self, "Ricerca Completata", "Nessuna partita trovata con i criteri specificati.")
-
         except Exception as e:
             logging.getLogger("CatastoGUI").error(
-                f"Errore imprevisto durante RicercaPartiteWidget.do_search: {e}", exc_info=True)
+                f"Errore in RicercaPartiteWidget._run_paginated_search: {e}", exc_info=True)
             QMessageBox.critical(
                 self, "Errore di Ricerca", f"Si è verificato un errore imprevisto durante la ricerca: {e}")
+            return
 
-    def vai_a_pagina_precedente(self):
-        if self.current_page > 1:
-            self.current_page -= 1
-            self.load_data()
+        self.total_records = total
+        self.results_table.setRowCount(0)
 
-    def vai_a_pagina_successiva(self):
-        total_pages = (self.total_records + self.page_size - 1) // self.page_size
-        if self.current_page < total_pages:
-            self.current_page += 1
-            self.load_data()
+        if partite:
+            self.results_table.setRowCount(len(partite))
+            for row_idx, p in enumerate(partite):
+                self.results_table.setItem(row_idx, 0, QTableWidgetItem(str(p.get('id', ''))))
+                self.results_table.setItem(row_idx, 1, QTableWidgetItem(p.get('comune_nome', '') or ''))
+                self.results_table.setItem(row_idx, 2, QTableWidgetItem(str(p.get('numero_partita', ''))))
+                self.results_table.setItem(row_idx, 3, QTableWidgetItem(p.get('tipo', '') or ''))
+                self.results_table.setItem(row_idx, 4, QTableWidgetItem(p.get('stato', '') or ''))
+            self.results_table.resizeColumnsToContents()
+        elif notify_no_results and total == 0:
+            QMessageBox.information(
+                self, "Ricerca Completata", "Nessuna partita trovata con i criteri specificati.")
+
+        self._update_pagination_ui()
     def show_details(self):
         """Mostra i dettagli della partita selezionata."""
         # Ottiene l'ID della partita selezionata
