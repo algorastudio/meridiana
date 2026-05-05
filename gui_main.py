@@ -477,6 +477,10 @@ class CatastoMainWindow(QMainWindow, MainWindowActionsMixin):
         self.operazioni_partita_widget_ref = OperazioniPartitaWidget(self.db_manager)
         self.inserimento_sub_tabs.addTab(self.operazioni_partita_widget_ref, "Operazioni")
 
+        self.registrazione_proprieta_widget_ref.partita_creata_per_operazioni_collegate.connect(
+            lambda pid, cid: self._handle_partita_creata_per_operazioni(pid, cid, self.operazioni_partita_widget_ref)
+        )
+
         self.registra_consultazione_widget_ref = RegistraConsultazioneWidget(self.db_manager, self.logged_in_user_info)
         self.inserimento_sub_tabs.addTab(self.registra_consultazione_widget_ref, "Reg. Consultazione")
 
