@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+print("DEBUG: main.py starting...", flush=True)
 import sys
 import os
 import logging

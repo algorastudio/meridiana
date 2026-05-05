@@ -8,7 +8,7 @@ fpdf2_datas = collect_data_files('fpdf')
 pandas_datas = collect_data_files('pandas')
 
 a = Analysis(
-    ['gui_main.py'],
+    ['main.py'],
     pathex=[],
     binaries=[],
     datas=[
