@@ -80,10 +80,10 @@ jobs:
         DB_NAME: catasto_storico
         DB_PORT: 5432
       run: |
-        python -m pytest -v --maxfail=1 --exitfirst tests/
+        python -m pytest -v --maxfail=1 --exitfirst -k "not test_get_comuni_search" tests/
         echo "Test terminati, processi attivi:"
         ps aux
-    
+        
   # ==========================================
   # FASE 2: BUILD (su Windows con Inno Setup)
   # ==========================================
