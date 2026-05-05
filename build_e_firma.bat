@@ -48,7 +48,7 @@ if %errorlevel% neq 0 (
 
 echo.
 echo [4/4] Firma digitale dell'Installer in corso...
-"%SIGNTOOL_PATH%" sign /tr http://time.certum.pl/ /td sha256 /fd sha256 /a "Installer\Meridiana_1.2_Setup.exe"
+"%SIGNTOOL_PATH%" sign /tr http://time.certum.pl/ /td sha256 /fd sha256 /a "Installer\Meridiana_1.3.0_Setup.exe"
 if %errorlevel% neq 0 (
     echo [ERRORE] Firma dell'Installer fallita! Controlla SimplySign.
     pause
