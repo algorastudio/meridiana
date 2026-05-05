@@ -9,6 +9,6 @@ pytest-mock>=3.10.0
 # Database (se disponibile)
 psycopg2-binary>=2.9.0
 
-# GUI (opzionale per ora)
-# PyQt5>=5.15.0
+# GUI (richiesto per test widget)
+PyQt5>=5.15.0
 pytest-qt>=4.2.0

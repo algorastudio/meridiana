@@ -9,6 +9,7 @@ Test per i widget PyQt5 del sistema catasto
 # tests/test_gui_widgets.py
 
 import pytest
+import os
 from unittest.mock import Mock, patch, MagicMock
 from PyQt5.QtWidgets import QApplication, QWidget, QTableWidget, QMessageBox
 from PyQt5.QtCore import Qt, QEvent
@@ -26,7 +27,8 @@ from gui_widgets import (
 # Fixture per QApplication
 @pytest.fixture(scope='session')
 def qapp():
-    """Crea QApplication per test GUI"""
+    """Crea QApplication per test GUI in headless mode"""
+    os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
     app = QApplication.instance()
     if app is None:
         app = QApplication(sys.argv)

@@ -12,6 +12,7 @@ from gui_widgets import EsportazioniWidget
 # Fixture per creare una singola istanza di QApplication per la sessione di test
 @pytest.fixture(scope="session")
 def qapp():
+    os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
     app = QApplication.instance()
     if app is None:
         app = QApplication(sys.argv)

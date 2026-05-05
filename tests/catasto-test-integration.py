@@ -19,11 +19,23 @@ import time
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtTest import QTest
+import sys
 
 # Import componenti da testare
 from catasto_db_manager import CatastoDBManager
 from gui_main import MainWindow
 from gui_widgets import *
+
+
+# Fixture per QApplication in headless mode
+@pytest.fixture(scope='session')
+def qapp():
+    """Crea QApplication per test GUI in ambiente headless"""
+    os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication(sys.argv)
+    yield app
 
 
 class TestDatabaseGUIIntegration:
