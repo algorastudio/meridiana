@@ -79,8 +79,9 @@ jobs:
         DB_PASS: testpassword
         DB_NAME: catasto_storico
         DB_PORT: 5432
+        QT_QPA_PLATFORM: offscreen
       run: |
-        python -m pytest tests/
+        python -m pytest tests/ -v --tb=short --timeout=30 -x 2>&1 | head -1000
 
   # ==========================================
   # FASE 2: BUILD (su Windows con Inno Setup)
