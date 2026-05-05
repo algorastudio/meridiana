@@ -2130,13 +2130,15 @@ class _PossessoriPage(QWizardPage):
         dialog = CreatePossessoreDialog(self._wiz.db_manager, self)
         if dialog.exec_() == QDialog.Accepted and dialog.nuovo_possessore_dati:
             info = dialog.nuovo_possessore_dati
+            nome = getattr(info, 'nome_completo', '')
+            pid = getattr(info, 'id', None)
             self._wiz._load_possessori()
             self._refresh_combo()
             dettagli = DettagliLegamePossessoreDialog.get_details_for_new_legame(
-                info['nome_completo'], 'principale', self)
+                nome, 'principale', self)
             if dettagli:
                 self._wiz.possessori_data.append(
-                    {"id": info['id'], "nome_completo": info['nome_completo'], **dettagli})
+                    {"id": pid, "nome_completo": nome, **dettagli})
                 self._refresh_table()
 
     def _remove_selected(self):
