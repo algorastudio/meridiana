@@ -1,5 +1,5 @@
 -- File: 99_performance_test_data.sql
--- Script di performance testing per Meridiana v1.2.1
+-- Script di performance testing per Meridiana v1.3.0
 -- Genera ~100.000 partite su 100 comuni, ~20.000 possessori,
 -- ~300 localita e ~100.000+ immobili
 -- Tempo stimato: 2-5 minuti su PostgreSQL 14+

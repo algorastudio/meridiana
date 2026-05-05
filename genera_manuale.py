@@ -286,7 +286,7 @@ def build():
     for i, r in enumerate([
         ("1.0",   "2025-01", "Prima versione funzionante"),
         ("1.2.0", "2025-05", "CI/CD, build Windows, 16 temi, backup, fuzzy search, gestione utenti"),
-        ("1.2.1", "2026-04", "Soft delete, validazione date, suite test 100+, rimozione campo civico"),
+        ("1.3.0", "2026-04", "Soft delete, validazione date, suite test 100+, rimozione campo civico"),
         ("1.3.0", "2026-04", "Data layer Dataclass, Titoli possesso, fix display partite, fix QSS"),
     ]):
         pdf.trow(r, [25, 30, 125], alt=bool(i % 2))
@@ -326,7 +326,7 @@ def build():
         "Confermare: il sistema creera' schema, tabelle, stored procedure e dati iniziali.",
     ]:
         pdf.bullet(t)
-    pdf.nota("Per ambienti gia' esistenti con versione precedente a 1.2.1, eseguire manualmente "
+    pdf.nota("Per ambienti gia' esistenti con versione precedente a 1.3.0, eseguire manualmente "
              "gli script SQL mancanti in ordine numerico dalla cartella sql_scripts/.")
     pdf.ln(3)
     pdf.sec("Variabili d'Ambiente per la Connessione")
@@ -1050,7 +1050,7 @@ def build():
          "Le statistiche si caricano all'apertura del tab Home. "
          "Navigare verso un altro tab e tornare su Home per forzare il refresh."),
         ("Errore al bootstrap: 'cerca_possessori non esiste'",
-         "Problema risolto in versione 1.2.1. Aggiornare Meridiana o eseguire manualmente "
+         "Problema risolto in versione 1.3.0. Aggiornare Meridiana o eseguire manualmente "
          "lo script sql_scripts/15_integration_audit_users.sql."),
         ("Come recuperare una partita archiviata?",
          "Le entita' archiviate non sono visibili nell'interfaccia grafica. "

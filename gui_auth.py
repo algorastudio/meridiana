@@ -162,7 +162,7 @@ class LoginDialog(QDialog):
         self.logged_in_user_info: Optional[Dict] = None
         self.current_session_id_from_dialog: Optional[str] = None
 
-        self.setWindowTitle("Login - Meridiana")
+        self.setWindowTitle("Login - Meridiana 1.3.0")
         self.setMinimumWidth(350)
         self.setModal(True)
 

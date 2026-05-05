@@ -79,7 +79,7 @@ con `getattr()` anziché `.get()`.
 
 ---
 
-## [1.2.1] — 2026-04-20
+## [1.3.0] — 2026-04-20
 
 Versione preparata per la consegna in comodato d'uso all'**Archivio di Stato di Savona**.
 

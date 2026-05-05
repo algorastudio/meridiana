@@ -8,7 +8,7 @@
   ![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)
   ![PyQt5](https://img.shields.io/badge/PyQt5-5.15-green)
   ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14%2B-336791?logo=postgresql)
-  ![Versione](https://img.shields.io/badge/versione-1.2.1-orange)
+  ![Versione](https://img.shields.io/badge/versione-1.3.0-orange)
   ![Licenza](https://img.shields.io/badge/licenza-comodato%20d'uso-lightgrey)
 </div>
 
@@ -325,8 +325,8 @@ push / tag v* ─┐
 Per generare un nuovo installer è sufficiente creare e pubblicare un tag:
 
 ```bash
-git tag v1.2.1
-git push origin v1.2.1
+git tag v1.3.0
+git push origin v1.3.0
 ```
 
 La CI produrrà automaticamente il file `Meridiana_*_Setup.exe` e lo pubblicherà come GitHub Release.
@@ -351,5 +351,5 @@ Il software è concesso in **comodato d'uso gratuito, esclusivo e non trasferibi
 ---
 
 <div align="center">
-  <sub>Meridiana 1.2.1 · Sviluppato da Marco Santoro · In gentile concessione all'Archivio di Stato di Savona</sub>
+  <sub>Meridiana 1.3.0 · Sviluppato da Marco Santoro · In gentile concessione all'Archivio di Stato di Savona</sub>
 </div>

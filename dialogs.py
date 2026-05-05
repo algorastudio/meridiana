@@ -4062,7 +4062,14 @@ class PossessoreSelectionDialog(QDialog):
 
         # --- MODIFICA CHIAVE: Combo per selezionare il comune del NUOVO possessore ---
         self.new_poss_comune_combo = QComboBox()
-        create_layout.addRow("Comune di Riferimento (*):", self.new_poss_comune_combo)
+        comune_row_layout = QHBoxLayout()
+        comune_row_layout.addWidget(self.new_poss_comune_combo)
+        btn_refresh_comuni = QPushButton("⟳")
+        btn_refresh_comuni.setToolTip("Aggiorna lista comuni")
+        btn_refresh_comuni.setFixedWidth(30)
+        btn_refresh_comuni.clicked.connect(self._load_comuni_for_combo)
+        comune_row_layout.addWidget(btn_refresh_comuni)
+        create_layout.addRow("Comune di Riferimento (*):", comune_row_layout)
         # --- FINE MODIFICA ---
 
         self.attivo_checkbox = QCheckBox("Attivo")
@@ -4671,8 +4678,15 @@ class CreatePossessoreDialog(QDialog):
         layout.addRow("Cognome e Nome (*):", self.cognome_nome_edit)
         layout.addRow("Paternità:", self.paternita_edit)
         layout.addRow(self.btn_genera_nome)
+        self.btn_refresh_comuni = QPushButton("⟳")
+        self.btn_refresh_comuni.setToolTip("Aggiorna lista comuni")
+        self.btn_refresh_comuni.setFixedWidth(30)
+        self.btn_refresh_comuni.clicked.connect(self._carica_comuni)
+        comune_row = QHBoxLayout()
+        comune_row.addWidget(self.comune_combo)
+        comune_row.addWidget(self.btn_refresh_comuni)
         layout.addRow("Nome Completo (*):", self.nome_completo_edit)
-        layout.addRow("Comune di Riferimento (*):", self.comune_combo)
+        layout.addRow("Comune di Riferimento (*):", comune_row)
         layout.addRow(self.attivo_check)
 
         self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -4686,6 +4700,7 @@ class CreatePossessoreDialog(QDialog):
         self._carica_comuni()
 
     def _carica_comuni(self):
+        self.comune_combo.clear()
         self.comune_combo.addItem("--- Seleziona ---", None)
         try:
             comuni = self.db_manager.get_elenco_comuni_semplice()
@@ -5587,7 +5602,7 @@ class EulaDialog(QDialog):
     """Dialogo per la visualizzazione e l'accettazione dell'EULA."""
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Contratto di Licenza (EULA) - Meridiana 1.2.1")
+        self.setWindowTitle("Contratto di Licenza (EULA) - Meridiana 1.3.0")
         self.setMinimumSize(600, 500)
         self.setModal(True)
 

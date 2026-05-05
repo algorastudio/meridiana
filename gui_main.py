@@ -6,7 +6,7 @@ Interfaccia Grafica per Gestionale Catasto Storico
 =================================================
 Autore: Marco Santoro
 Data: 21/04/2026
-Versione: 1.2.1
+Versione: 1.3.0
 """
 import sys,bcrypt
 import zipfile
@@ -168,7 +168,7 @@ class CatastoMainWindow(QMainWindow, MainWindowActionsMixin):
         self.gestione_periodi_storici_widget_ref: Optional[GestionePeriodiStoriciWidget] = None
         self.gestione_tipi_localita_widget_ref: Optional[GestioneTipiLocalitaWidget] = None
         
-        self.setWindowTitle("Meridiana 1.2.1 - Gestionale Catasto Storico")
+        self.setWindowTitle("Meridiana 1.3.0 - Gestionale Catasto Storico")
         self.setMinimumSize(1280, 720)
         self.central_widget = QWidget()
         self.main_layout = QVBoxLayout(self.central_widget)
@@ -476,6 +476,10 @@ class CatastoMainWindow(QMainWindow, MainWindowActionsMixin):
 
         self.operazioni_partita_widget_ref = OperazioniPartitaWidget(self.db_manager)
         self.inserimento_sub_tabs.addTab(self.operazioni_partita_widget_ref, "Operazioni")
+
+        self.registrazione_proprieta_widget_ref.partita_creata_per_operazioni_collegate.connect(
+            lambda pid, cid: self._handle_partita_creata_per_operazioni(pid, cid, self.operazioni_partita_widget_ref)
+        )
 
         self.registra_consultazione_widget_ref = RegistraConsultazioneWidget(self.db_manager, self.logged_in_user_info)
         self.inserimento_sub_tabs.addTab(self.registra_consultazione_widget_ref, "Reg. Consultazione")
