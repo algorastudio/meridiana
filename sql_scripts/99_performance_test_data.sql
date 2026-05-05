@@ -1,3 +1,4 @@
+-- Active: 1748875024207@@127.0.0.1@5432@catasto_meridiana
 -- File: 99_performance_test_data.sql
 -- Script di performance testing per Meridiana v1.3.0
 -- Genera ~100.000 partite su 100 comuni, ~20.000 possessori,
