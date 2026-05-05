@@ -444,7 +444,7 @@ class CatastoMainWindow(QMainWindow, MainWindowActionsMixin):
         if FUZZY_SEARCH_AVAILABLE:
             self.fuzzy_search_widget = UnifiedFuzzySearchWidget(self.db_manager, parent=self.tabs)
             self.fuzzy_search_widget.setObjectName("tab_ricerca")
-            self.tabs.addTab(self.fuzzy_search_widget, "🔍 Ricerca")
+            self.tabs.addTab(self.fuzzy_search_widget, "🔍 Ricerca Globale")
 
         # 4. Tab Inserimento
         inserimento_contenitore = QWidget()
