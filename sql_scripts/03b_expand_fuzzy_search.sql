@@ -603,7 +603,6 @@ BEGIN
         'nome'::TEXT as search_field,
         jsonb_build_object(
             'tipo', tl.nome,
-            'civico', l.civico,
             'comune', c.nome
         ) as additional_info
     FROM localita l
