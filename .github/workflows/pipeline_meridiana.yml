@@ -51,7 +51,24 @@ jobs:
       run: |
         sudo apt-get install -y postgresql-client
         psql -h localhost -U postgres -d catasto_storico -f sql_scripts/02_creazione-schema-tabelle.sql
-        psql -h localhost -U postgres -d catasto_storico -f sql_scripts/03_funzioni-procedure.sql
+        psql -h localhost -U postgres -d catasto_storico -f sql_scripts/03_funzioni-procedure_def.sql
+        psql -h localhost -U postgres -d catasto_storico -f sql_scripts/07_user-management.sql
+        psql -h localhost -U postgres -d catasto_storico -f sql_scripts/19_creazione_tabella_sessioni.sql
+        psql -h localhost -U postgres -d catasto_storico -f sql_scripts/18_funzioni_trigger_audit.sql
+        psql -h localhost -U postgres -d catasto_storico -f sql_scripts/08_advanced-reporting.sql
+        psql -h localhost -U postgres -d catasto_storico -f sql_scripts/09_backup-system.sql
+        psql -h localhost -U postgres -d catasto_storico -f sql_scripts/10_performance-optimization.sql
+        psql -h localhost -U postgres -d catasto_storico -f sql_scripts/11_advanced-cadastral-features.sql
+        psql -h localhost -U postgres -d catasto_storico -f sql_scripts/12_procedure_crud.sql
+        psql -h localhost -U postgres -d catasto_storico -f sql_scripts/13_workflow_integrati.sql
+        psql -h localhost -U postgres -d catasto_storico -f sql_scripts/14_report_functions.sql
+        psql -h localhost -U postgres -d catasto_storico -f sql_scripts/15_integration_audit_users.sql
+        psql -h localhost -U postgres -d catasto_storico -f sql_scripts/16_advanced_search.sql
+        psql -h localhost -U postgres -d catasto_storico -f sql_scripts/17_funzione_ricerca_immobili.sql
+        psql -h localhost -U postgres -d catasto_storico -f sql_scripts/20_feature_tipi_localita.sql
+        psql -h localhost -U postgres -d catasto_storico -f sql_scripts/21_soft_delete.sql
+        psql -h localhost -U postgres -d catasto_storico -f sql_scripts/22_drop_civico_localita.sql
+        psql -h localhost -U postgres -d catasto_storico -f sql_scripts/23_titoli_possesso.sql
 
     - name: Esecuzione Test Automatici (Pytest)
       env:
