@@ -4705,16 +4705,18 @@ class GestioneUtentiWidget(LazyLoadedWidget):
         self.btn_crea_utente.setEnabled(self.is_admin)
         self.btn_refresh_list = QPushButton(QApplication.style().standardIcon(QStyle.SP_BrowserReload), " Aggiorna Lista")
         self.btn_refresh_list.clicked.connect(self.refresh_user_list)
-        
+
         action_layout.addWidget(self.btn_crea_utente)
         action_layout.addStretch()
         action_layout.addWidget(self.btn_refresh_list)
         layout.addLayout(action_layout)
 
-        # Tabella Utenti
+        # Tabella Utenti (7 colonne: + Sicurezza)
         self.user_table = QTableWidget()
-        self.user_table.setColumnCount(6)
-        self.user_table.setHorizontalHeaderLabels(["ID", "Username", "Nome Completo", "Email", "Ruolo", "Stato"])
+        self.user_table.setColumnCount(7)
+        self.user_table.setHorizontalHeaderLabels(
+            ["ID", "Username", "Nome Completo", "Email", "Ruolo", "Stato", "Sicurezza"]
+        )
         self.user_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.user_table.setSelectionMode(QTableWidget.SingleSelection)
         self.user_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -4726,22 +4728,27 @@ class GestioneUtentiWidget(LazyLoadedWidget):
         manage_layout = QHBoxLayout()
         self.btn_modifica_utente = QPushButton("Modifica Utente")
         self.btn_modifica_utente.clicked.connect(self.modifica_utente_selezionato)
-        
+
         self.btn_reset_password = QPushButton("Resetta Password")
         self.btn_reset_password.clicked.connect(self.reset_password_utente_selezionato)
-        
+
+        self.btn_sblocca_utente = QPushButton("Sblocca Utente")
+        self.btn_sblocca_utente.setToolTip("Sblocca un account bloccato per troppi tentativi falliti")
+        self.btn_sblocca_utente.clicked.connect(self.sblocca_utente_selezionato)
+
         self.btn_toggle_stato = QPushButton("Attiva/Disattiva Utente")
         self.btn_toggle_stato.clicked.connect(self.toggle_stato_utente_selezionato)
-        
+
         self.btn_delete_utente = QPushButton("Elimina Utente")
         self.btn_delete_utente.clicked.connect(self.elimina_utente_selezionato)
 
         manage_layout.addWidget(self.btn_modifica_utente)
         manage_layout.addWidget(self.btn_reset_password)
+        manage_layout.addWidget(self.btn_sblocca_utente)
         manage_layout.addWidget(self.btn_toggle_stato)
         manage_layout.addWidget(self.btn_delete_utente)
         layout.addLayout(manage_layout)
-        
+
         # Imposta lo stato iniziale dei pulsanti
         self._update_action_buttons_state()
 
@@ -4752,6 +4759,7 @@ class GestioneUtentiWidget(LazyLoadedWidget):
 
     def refresh_user_list(self):
         """Carica o ricarica la lista degli utenti dal database e la visualizza."""
+        from datetime import datetime, timezone
         self.logger.info("Aggiornamento della lista utenti in corso...")
         self.user_table.setSortingEnabled(False)
         self.user_table.setRowCount(0)
@@ -4765,6 +4773,32 @@ class GestioneUtentiWidget(LazyLoadedWidget):
                 self.user_table.setItem(row, 3, QTableWidgetItem(user_data.get('email', 'N/D')))
                 self.user_table.setItem(row, 4, QTableWidgetItem(user_data['ruolo']))
                 self.user_table.setItem(row, 5, QTableWidgetItem("Attivo" if user_data['attivo'] else "Non Attivo"))
+
+                # Colonna Sicurezza: stato blocco / cambio password
+                locked_until = user_data.get('locked_until')
+                must_change = user_data.get('password_must_change', False)
+                now = datetime.now(timezone.utc)
+                is_locked = False
+                if locked_until is not None:
+                    if hasattr(locked_until, 'tzinfo') and locked_until.tzinfo is None:
+                        locked_until = locked_until.replace(tzinfo=timezone.utc)
+                    is_locked = locked_until > now
+
+                if is_locked:
+                    security_text = "BLOCCATO"
+                elif must_change:
+                    security_text = "Cambio pwd"
+                else:
+                    tentativi = user_data.get('failed_attempts', 0) or 0
+                    security_text = f"{tentativi} err." if tentativi > 0 else "OK"
+
+                item_sec = QTableWidgetItem(security_text)
+                if is_locked:
+                    item_sec.setForeground(__import__('PyQt5.QtGui', fromlist=['QColor']).QColor('red'))
+                elif must_change:
+                    item_sec.setForeground(__import__('PyQt5.QtGui', fromlist=['QColor']).QColor('orange'))
+                self.user_table.setItem(row, 6, item_sec)
+
             self.user_table.resizeColumnsToContents()
             self.logger.info("Lista utenti aggiornata con successo.")
         except DBMError as e:
@@ -4778,6 +4812,7 @@ class GestioneUtentiWidget(LazyLoadedWidget):
         has_selection = bool(self.user_table.selectedItems())
         self.btn_modifica_utente.setEnabled(has_selection and self.is_admin)
         self.btn_reset_password.setEnabled(has_selection and self.is_admin)
+        self.btn_sblocca_utente.setEnabled(has_selection and self.is_admin)
         self.btn_toggle_stato.setEnabled(has_selection and self.is_admin)
         self.btn_delete_utente.setEnabled(has_selection and self.is_admin)
 
@@ -4853,6 +4888,25 @@ class GestioneUtentiWidget(LazyLoadedWidget):
             QMessageBox.information(
                 self, "Info", "Nessuna modifica apportata.")
 
+    def sblocca_utente_selezionato(self):
+        """Sblocca un account bloccato per troppi tentativi falliti."""
+        user_id = self._get_selected_user_id()
+        if user_id is None:
+            return
+        utente = self.db_manager.get_utente_by_id(user_id)
+        if not utente:
+            QMessageBox.critical(self, "Errore", "Utente non trovato.")
+            return
+        try:
+            self.db_manager.unlock_user(user_id)
+            QMessageBox.information(
+                self, "Successo",
+                f"Account '{utente['username']}' sbloccato. L'utente puo' effettuare nuovamente il login."
+            )
+            self.refresh_user_list()
+        except Exception as e:
+            QMessageBox.critical(self, "Errore", f"Impossibile sbloccare l'utente:\n{e}")
+
     def reset_password_utente_selezionato(self):
         user_id = self._get_selected_user_id()
         if user_id is None:
@@ -4862,29 +4916,58 @@ class GestioneUtentiWidget(LazyLoadedWidget):
                                 "Non puoi resettare la tua password da questa interfaccia.")
             return
 
+        utente = self.db_manager.get_utente_by_id(user_id)
+        if not utente:
+            QMessageBox.critical(self, "Errore", "Utente non trovato.")
+            return
+
+        from gui_auth import validate_password_strength
+        try:
+            cfg = self.db_manager.get_security_config()
+        except Exception:
+            cfg = {}
+        min_len = int(cfg.get('min_lunghezza_password', 12))
+
         new_password, ok = QInputDialog.getText(
-            self, "Reset Password", "Inserisci la nuova password temporanea:", QLineEdit.Password)
-        if ok and new_password:
-            new_password_confirm, ok_confirm = QInputDialog.getText(
-                self, "Conferma Password", "Conferma la nuova password temporanea:", QLineEdit.Password)
-            if ok_confirm and new_password == new_password_confirm:
-                try:
-                    new_hash = _hash_password(new_password)
-                    if self.db_manager.reset_user_password(user_id, new_hash):
-                        QMessageBox.information(
-                            self, "Successo", f"Password per utente ID {user_id} resettata.")
-                    else:
-                        QMessageBox.critical(
-                            self, "Errore", "Reset password fallito.")
-                except Exception as e:
-                    QMessageBox.critical(
-                        self, "Errore Hashing", f"Errore durante l'hashing: {e}")
-            elif ok_confirm:  # ma password non coincidono
-                QMessageBox.warning(
-                    self, "Errore", "Le password non coincidono.")
-        elif ok:  # password vuota
-            QMessageBox.warning(
-                self, "Errore", "La password non può essere vuota.")
+            self, "Reset Password",
+            f"Inserisci la nuova password temporanea per '{utente['username']}'\n"
+            f"(minimo {min_len} caratteri, maiuscole, numeri e caratteri speciali):",
+            QLineEdit.Password
+        )
+        if not ok:
+            return
+        if not new_password:
+            QMessageBox.warning(self, "Errore", "La password non puo' essere vuota.")
+            return
+
+        ok_strength, msg = validate_password_strength(new_password, cfg)
+        if not ok_strength:
+            QMessageBox.warning(self, "Password Non Valida", msg)
+            return
+
+        new_password_confirm, ok_confirm = QInputDialog.getText(
+            self, "Conferma Password", "Conferma la nuova password temporanea:", QLineEdit.Password)
+        if not ok_confirm:
+            return
+        if new_password != new_password_confirm:
+            QMessageBox.warning(self, "Errore", "Le password non coincidono.")
+            return
+
+        try:
+            new_hash = _hash_password(new_password)
+            if self.db_manager.reset_user_password(user_id, new_hash):
+                # Forza il cambio al prossimo login
+                self.db_manager.set_password_must_change(user_id, True)
+                QMessageBox.information(
+                    self, "Successo",
+                    f"Password per '{utente['username']}' resettata.\n"
+                    "All'utente sara' richiesto di cambiarla al prossimo accesso."
+                )
+                self.refresh_user_list()
+            else:
+                QMessageBox.critical(self, "Errore", "Reset password fallito.")
+        except Exception as e:
+            QMessageBox.critical(self, "Errore Hashing", f"Errore durante il reset: {e}")
 
     def toggle_stato_utente_selezionato(self):
         user_id = self._get_selected_user_id()
