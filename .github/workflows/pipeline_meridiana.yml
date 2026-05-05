@@ -71,6 +71,7 @@ jobs:
         psql -h localhost -U postgres -d catasto_storico -f sql_scripts/23_titoli_possesso.sql
 
     - name: Esecuzione Test Automatici (Pytest)
+      timeout-minutes: 10
       env:
         CI: true
         DB_HOST: localhost
@@ -79,8 +80,10 @@ jobs:
         DB_NAME: catasto_storico
         DB_PORT: 5432
       run: |
-        python -m pytest tests/
-
+        python -m pytest -v --maxfail=1 --exitfirst tests/
+        echo "Test terminati, processi attivi:"
+        ps aux
+    
   # ==========================================
   # FASE 2: BUILD (su Windows con Inno Setup)
   # ==========================================
