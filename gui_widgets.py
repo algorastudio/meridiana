@@ -581,21 +581,21 @@ class RicercaPartiteWidget(QWidget):
         """Passa alla pagina precedente e ricarica."""
         if self.current_page > 1:
             self.current_page -= 1
-            self.load_data()
+            self._run_paginated_search()
 
     def _next_page(self):
         """Passa alla pagina successiva e ricarica."""
         import math
-        total_pages = math.ceil(self.total_records / self.page_size)
+        total_pages = math.ceil(self.total_records / self.page_size) if self.page_size else 1
         if self.current_page < total_pages:
             self.current_page += 1
-            self.load_data()
+            self._run_paginated_search()
 
     def _change_page_size(self, new_size_str):
         """Cambiando i record per pagina, si resetta alla pagina 1."""
         self.page_size = int(new_size_str)
         self.current_page = 1
-        self.load_data()
+        self._run_paginated_search()
 
     def select_comune(self):
         """Apre il selettore di comuni."""
@@ -612,92 +612,59 @@ class RicercaPartiteWidget(QWidget):
         self.comune_display.setText("Nessun comune selezionato")
 
     def do_search(self):
-        """Esegue la ricerca partite in base ai criteri."""
-        comune_id = self.comune_id
+        """Acquisisce i criteri dalla UI, resetta la pagina e avvia la ricerca paginata."""
         numero_partita_val = self.numero_edit.value()
-        numero_partita = numero_partita_val if numero_partita_val > 0 and self.numero_edit.text(
-        ) != self.numero_edit.specialValueText() else None
+        numero_partita = (
+            numero_partita_val
+            if numero_partita_val > 0
+            and self.numero_edit.text() != self.numero_edit.specialValueText()
+            else None
+        )
+        self._search_criteria = {
+            "comune_id": self.comune_id,
+            "numero_partita": numero_partita,
+            "possessore": self.possessore_edit.text().strip() or None,
+            "immobile_natura": self.natura_edit.text().strip() or None,
+        }
+        self.current_page = 1
+        self._run_paginated_search(notify_no_results=True)
 
-        possessore = self.possessore_edit.text().strip() or None
-        natura = self.natura_edit.text().strip() or None
+    def _run_paginated_search(self, notify_no_results: bool = False):
+        """Esegue la query paginata con i criteri correnti e popola la tabella."""
+        if not hasattr(self, "_search_criteria") or self._search_criteria is None:
+            return
 
-        # --- Stampa di DEBUG dei parametri inviati ---
-        logging.getLogger("CatastoGUI").debug(
-            f"RicercaPartiteWidget.do_search - Parametri inviati al DBManager:")
-        logging.getLogger("CatastoGUI").debug(
-            f"  comune_id: {comune_id} (tipo: {type(comune_id)})")
-        logging.getLogger("CatastoGUI").debug(
-            f"  numero_partita: {numero_partita} (tipo: {type(numero_partita)})")
-        logging.getLogger("CatastoGUI").debug(
-            f"  possessore: '{possessore}' (tipo: {type(possessore)})")
-        logging.getLogger("CatastoGUI").debug(
-            f"  immobile_natura: '{natura}' (tipo: {type(natura)})")
-        # --- Fine Stampa di DEBUG ---
-
+        offset = (self.current_page - 1) * self.page_size
         try:
-            partite = self.db_manager.search_partite(
-                comune_id=comune_id,
-                numero_partita=numero_partita,
-                possessore=possessore,
-                immobile_natura=natura
+            partite, total = self.db_manager.search_partite_paginate(
+                limit=self.page_size,
+                offset=offset,
+                **self._search_criteria,
             )
-
-            # --- Stampa di DEBUG dei risultati ricevuti ---
-            logging.getLogger("CatastoGUI").debug(
-                f"RicercaPartiteWidget.do_search - Risultati ricevuti dal DBManager (tipo: {type(partite)}):")
-            if partite is not None:  # Controlla se partite è None prima di len()
-                logging.getLogger("CatastoGUI").debug(
-                    f"  Numero di partite ricevute: {len(partite)}")
-                # Se vuoi vedere i primi risultati per debug (attenzione con dati sensibili):
-                # for i, p_item in enumerate(partite[:3]): # Logga al massimo i primi 3
-                #    logging.getLogger("CatastoGUI").debug(f"    Partita {i}: {p_item}")
-            else:
-                logging.getLogger("CatastoGUI").debug(
-                    "  Nessun risultato (variabile 'partite' è None).")
-            # --- Fine Stampa di DEBUG ---
-
-            # Pulisce la tabella prima di popolarla
-            self.results_table.setRowCount(0)
-
-            if partite:  # Verifica se la lista 'partite' non è vuota
-                self.results_table.setRowCount(len(partite))
-                # Usa nomi variabili chiari
-                for row_idx, partita_data in enumerate(partite):
-                    self.results_table.setItem(
-                        row_idx, 0, QTableWidgetItem(str(partita_data.get('id', ''))))
-                    self.results_table.setItem(row_idx, 1, QTableWidgetItem(
-                        partita_data.get('comune_nome', '') or ''))
-                    self.results_table.setItem(row_idx, 2, QTableWidgetItem(
-                        str(partita_data.get('numero_partita', ''))))
-                    self.results_table.setItem(
-                        row_idx, 3, QTableWidgetItem(partita_data.get('tipo', '') or ''))
-                    self.results_table.setItem(
-                        row_idx, 4, QTableWidgetItem(partita_data.get('stato', '') or ''))
-                self.results_table.resizeColumnsToContents()  # Adatta le colonne al contenuto
-                QMessageBox.information(
-                    self, "Ricerca Completata", f"Trovate {len(partite)} partite corrispondenti ai criteri.")
-            else:
-                logging.getLogger("CatastoGUI").info(
-                    "RicercaPartiteWidget.do_search - Nessuna partita trovata o la lista risultati è vuota.")
-                QMessageBox.information(
-                    self, "Ricerca Completata", "Nessuna partita trovata con i criteri specificati.")
-
         except Exception as e:
             logging.getLogger("CatastoGUI").error(
-                f"Errore imprevisto durante RicercaPartiteWidget.do_search: {e}", exc_info=True)
+                f"Errore in RicercaPartiteWidget._run_paginated_search: {e}", exc_info=True)
             QMessageBox.critical(
                 self, "Errore di Ricerca", f"Si è verificato un errore imprevisto durante la ricerca: {e}")
+            return
 
-    def vai_a_pagina_precedente(self):
-        if self.current_page > 1:
-            self.current_page -= 1
-            self.load_data()
+        self.total_records = total
+        self.results_table.setRowCount(0)
 
-    def vai_a_pagina_successiva(self):
-        total_pages = (self.total_records + self.page_size - 1) // self.page_size
-        if self.current_page < total_pages:
-            self.current_page += 1
-            self.load_data()
+        if partite:
+            self.results_table.setRowCount(len(partite))
+            for row_idx, p in enumerate(partite):
+                self.results_table.setItem(row_idx, 0, QTableWidgetItem(str(p.get('id', ''))))
+                self.results_table.setItem(row_idx, 1, QTableWidgetItem(p.get('comune_nome', '') or ''))
+                self.results_table.setItem(row_idx, 2, QTableWidgetItem(str(p.get('numero_partita', ''))))
+                self.results_table.setItem(row_idx, 3, QTableWidgetItem(p.get('tipo', '') or ''))
+                self.results_table.setItem(row_idx, 4, QTableWidgetItem(p.get('stato', '') or ''))
+            self.results_table.resizeColumnsToContents()
+        elif notify_no_results and total == 0:
+            QMessageBox.information(
+                self, "Ricerca Completata", "Nessuna partita trovata con i criteri specificati.")
+
+        self._update_pagination_ui()
     def show_details(self):
         """Mostra i dettagli della partita selezionata."""
         # Ottiene l'ID della partita selezionata
@@ -4738,16 +4705,18 @@ class GestioneUtentiWidget(LazyLoadedWidget):
         self.btn_crea_utente.setEnabled(self.is_admin)
         self.btn_refresh_list = QPushButton(QApplication.style().standardIcon(QStyle.SP_BrowserReload), " Aggiorna Lista")
         self.btn_refresh_list.clicked.connect(self.refresh_user_list)
-        
+
         action_layout.addWidget(self.btn_crea_utente)
         action_layout.addStretch()
         action_layout.addWidget(self.btn_refresh_list)
         layout.addLayout(action_layout)
 
-        # Tabella Utenti
+        # Tabella Utenti (7 colonne: + Sicurezza)
         self.user_table = QTableWidget()
-        self.user_table.setColumnCount(6)
-        self.user_table.setHorizontalHeaderLabels(["ID", "Username", "Nome Completo", "Email", "Ruolo", "Stato"])
+        self.user_table.setColumnCount(7)
+        self.user_table.setHorizontalHeaderLabels(
+            ["ID", "Username", "Nome Completo", "Email", "Ruolo", "Stato", "Sicurezza"]
+        )
         self.user_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.user_table.setSelectionMode(QTableWidget.SingleSelection)
         self.user_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -4759,22 +4728,27 @@ class GestioneUtentiWidget(LazyLoadedWidget):
         manage_layout = QHBoxLayout()
         self.btn_modifica_utente = QPushButton("Modifica Utente")
         self.btn_modifica_utente.clicked.connect(self.modifica_utente_selezionato)
-        
+
         self.btn_reset_password = QPushButton("Resetta Password")
         self.btn_reset_password.clicked.connect(self.reset_password_utente_selezionato)
-        
+
+        self.btn_sblocca_utente = QPushButton("Sblocca Utente")
+        self.btn_sblocca_utente.setToolTip("Sblocca un account bloccato per troppi tentativi falliti")
+        self.btn_sblocca_utente.clicked.connect(self.sblocca_utente_selezionato)
+
         self.btn_toggle_stato = QPushButton("Attiva/Disattiva Utente")
         self.btn_toggle_stato.clicked.connect(self.toggle_stato_utente_selezionato)
-        
+
         self.btn_delete_utente = QPushButton("Elimina Utente")
         self.btn_delete_utente.clicked.connect(self.elimina_utente_selezionato)
 
         manage_layout.addWidget(self.btn_modifica_utente)
         manage_layout.addWidget(self.btn_reset_password)
+        manage_layout.addWidget(self.btn_sblocca_utente)
         manage_layout.addWidget(self.btn_toggle_stato)
         manage_layout.addWidget(self.btn_delete_utente)
         layout.addLayout(manage_layout)
-        
+
         # Imposta lo stato iniziale dei pulsanti
         self._update_action_buttons_state()
 
@@ -4785,6 +4759,7 @@ class GestioneUtentiWidget(LazyLoadedWidget):
 
     def refresh_user_list(self):
         """Carica o ricarica la lista degli utenti dal database e la visualizza."""
+        from datetime import datetime, timezone
         self.logger.info("Aggiornamento della lista utenti in corso...")
         self.user_table.setSortingEnabled(False)
         self.user_table.setRowCount(0)
@@ -4798,6 +4773,32 @@ class GestioneUtentiWidget(LazyLoadedWidget):
                 self.user_table.setItem(row, 3, QTableWidgetItem(user_data.get('email', 'N/D')))
                 self.user_table.setItem(row, 4, QTableWidgetItem(user_data['ruolo']))
                 self.user_table.setItem(row, 5, QTableWidgetItem("Attivo" if user_data['attivo'] else "Non Attivo"))
+
+                # Colonna Sicurezza: stato blocco / cambio password
+                locked_until = user_data.get('locked_until')
+                must_change = user_data.get('password_must_change', False)
+                now = datetime.now(timezone.utc)
+                is_locked = False
+                if locked_until is not None:
+                    if hasattr(locked_until, 'tzinfo') and locked_until.tzinfo is None:
+                        locked_until = locked_until.replace(tzinfo=timezone.utc)
+                    is_locked = locked_until > now
+
+                if is_locked:
+                    security_text = "BLOCCATO"
+                elif must_change:
+                    security_text = "Cambio pwd"
+                else:
+                    tentativi = user_data.get('failed_attempts', 0) or 0
+                    security_text = f"{tentativi} err." if tentativi > 0 else "OK"
+
+                item_sec = QTableWidgetItem(security_text)
+                if is_locked:
+                    item_sec.setForeground(__import__('PyQt5.QtGui', fromlist=['QColor']).QColor('red'))
+                elif must_change:
+                    item_sec.setForeground(__import__('PyQt5.QtGui', fromlist=['QColor']).QColor('orange'))
+                self.user_table.setItem(row, 6, item_sec)
+
             self.user_table.resizeColumnsToContents()
             self.logger.info("Lista utenti aggiornata con successo.")
         except DBMError as e:
@@ -4811,6 +4812,7 @@ class GestioneUtentiWidget(LazyLoadedWidget):
         has_selection = bool(self.user_table.selectedItems())
         self.btn_modifica_utente.setEnabled(has_selection and self.is_admin)
         self.btn_reset_password.setEnabled(has_selection and self.is_admin)
+        self.btn_sblocca_utente.setEnabled(has_selection and self.is_admin)
         self.btn_toggle_stato.setEnabled(has_selection and self.is_admin)
         self.btn_delete_utente.setEnabled(has_selection and self.is_admin)
 
@@ -4886,6 +4888,25 @@ class GestioneUtentiWidget(LazyLoadedWidget):
             QMessageBox.information(
                 self, "Info", "Nessuna modifica apportata.")
 
+    def sblocca_utente_selezionato(self):
+        """Sblocca un account bloccato per troppi tentativi falliti."""
+        user_id = self._get_selected_user_id()
+        if user_id is None:
+            return
+        utente = self.db_manager.get_utente_by_id(user_id)
+        if not utente:
+            QMessageBox.critical(self, "Errore", "Utente non trovato.")
+            return
+        try:
+            self.db_manager.unlock_user(user_id)
+            QMessageBox.information(
+                self, "Successo",
+                f"Account '{utente['username']}' sbloccato. L'utente puo' effettuare nuovamente il login."
+            )
+            self.refresh_user_list()
+        except Exception as e:
+            QMessageBox.critical(self, "Errore", f"Impossibile sbloccare l'utente:\n{e}")
+
     def reset_password_utente_selezionato(self):
         user_id = self._get_selected_user_id()
         if user_id is None:
@@ -4895,29 +4916,58 @@ class GestioneUtentiWidget(LazyLoadedWidget):
                                 "Non puoi resettare la tua password da questa interfaccia.")
             return
 
+        utente = self.db_manager.get_utente_by_id(user_id)
+        if not utente:
+            QMessageBox.critical(self, "Errore", "Utente non trovato.")
+            return
+
+        from gui_auth import validate_password_strength
+        try:
+            cfg = self.db_manager.get_security_config()
+        except Exception:
+            cfg = {}
+        min_len = int(cfg.get('min_lunghezza_password', 12))
+
         new_password, ok = QInputDialog.getText(
-            self, "Reset Password", "Inserisci la nuova password temporanea:", QLineEdit.Password)
-        if ok and new_password:
-            new_password_confirm, ok_confirm = QInputDialog.getText(
-                self, "Conferma Password", "Conferma la nuova password temporanea:", QLineEdit.Password)
-            if ok_confirm and new_password == new_password_confirm:
-                try:
-                    new_hash = _hash_password(new_password)
-                    if self.db_manager.reset_user_password(user_id, new_hash):
-                        QMessageBox.information(
-                            self, "Successo", f"Password per utente ID {user_id} resettata.")
-                    else:
-                        QMessageBox.critical(
-                            self, "Errore", "Reset password fallito.")
-                except Exception as e:
-                    QMessageBox.critical(
-                        self, "Errore Hashing", f"Errore durante l'hashing: {e}")
-            elif ok_confirm:  # ma password non coincidono
-                QMessageBox.warning(
-                    self, "Errore", "Le password non coincidono.")
-        elif ok:  # password vuota
-            QMessageBox.warning(
-                self, "Errore", "La password non può essere vuota.")
+            self, "Reset Password",
+            f"Inserisci la nuova password temporanea per '{utente['username']}'\n"
+            f"(minimo {min_len} caratteri, maiuscole, numeri e caratteri speciali):",
+            QLineEdit.Password
+        )
+        if not ok:
+            return
+        if not new_password:
+            QMessageBox.warning(self, "Errore", "La password non puo' essere vuota.")
+            return
+
+        ok_strength, msg = validate_password_strength(new_password, cfg)
+        if not ok_strength:
+            QMessageBox.warning(self, "Password Non Valida", msg)
+            return
+
+        new_password_confirm, ok_confirm = QInputDialog.getText(
+            self, "Conferma Password", "Conferma la nuova password temporanea:", QLineEdit.Password)
+        if not ok_confirm:
+            return
+        if new_password != new_password_confirm:
+            QMessageBox.warning(self, "Errore", "Le password non coincidono.")
+            return
+
+        try:
+            new_hash = _hash_password(new_password)
+            if self.db_manager.reset_user_password(user_id, new_hash):
+                # Forza il cambio al prossimo login
+                self.db_manager.set_password_must_change(user_id, True)
+                QMessageBox.information(
+                    self, "Successo",
+                    f"Password per '{utente['username']}' resettata.\n"
+                    "All'utente sara' richiesto di cambiarla al prossimo accesso."
+                )
+                self.refresh_user_list()
+            else:
+                QMessageBox.critical(self, "Errore", "Reset password fallito.")
+        except Exception as e:
+            QMessageBox.critical(self, "Errore Hashing", f"Errore durante il reset: {e}")
 
     def toggle_stato_utente_selezionato(self):
         user_id = self._get_selected_user_id()
