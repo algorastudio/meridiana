@@ -564,7 +564,7 @@ BEGIN
     SELECT jsonb_agg(to_jsonb(imm_data))
     INTO v_immobili
     FROM (
-        SELECT i.id, i.natura, l.nome as localita_nome, i.classificazione, i.consistenza, l.civico
+        SELECT i.id, i.natura, l.nome as localita_nome, i.classificazione, i.consistenza
         FROM catasto.immobile i
         JOIN catasto.localita l ON i.localita_id = l.id
         WHERE i.partita_id = p_partita_id

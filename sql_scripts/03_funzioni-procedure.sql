@@ -353,7 +353,6 @@ BEGIN
         'nome'::TEXT,
         jsonb_build_object(
             'tipo', tl.nome,
-            'civico', l.civico,
             'comune', c.nome
         )
     FROM localita l
