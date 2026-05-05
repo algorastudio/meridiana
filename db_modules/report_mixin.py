@@ -90,24 +90,126 @@ class ReportMixin:
 
 
     def genera_report_proprieta(self, partita_id: int) -> Optional[str]:
-        """Chiama la funzione SQL catasto.genera_report_proprieta in modo sicuro."""
+        """Genera il report di proprietà immobiliare in Python (senza stored procedure)."""
         if not isinstance(partita_id, int) or partita_id <= 0:
             self.logger.error(f"ID partita non valido: {partita_id}")
             return None
-        
-        query = f"SELECT {self.schema}.genera_report_proprieta(%s);"
-        
+
+        s = self.schema
         try:
             with self._get_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(query, (partita_id,))
-                    result = cur.fetchone()
-                    if result and result[0] is not None:
-                        self.logger.info(f"Report di proprietà generato per partita ID {partita_id}.")
-                        return str(result[0])
-                    else:
-                        self.logger.warning(f"Nessun report generato per partita ID {partita_id}.")
-                        return None
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                    # Partita + comune
+                    cur.execute(f"""
+                        SELECT p.*, c.nome AS comune_nome
+                        FROM {s}.partita p
+                        JOIN {s}.comune c ON p.comune_id = c.id
+                        WHERE p.id = %s
+                    """, (partita_id,))
+                    partita = cur.fetchone()
+                    if not partita:
+                        return f"Partita con ID {partita_id} non trovata"
+
+                    # Possessori
+                    cur.execute(f"""
+                        SELECT pos.nome_completo, pp.titolo, pp.quota
+                        FROM {s}.partita_possessore pp
+                        JOIN {s}.possessore pos ON pp.possessore_id = pos.id
+                        WHERE pp.partita_id = %s
+                        ORDER BY pos.nome_completo
+                    """, (partita_id,))
+                    possessori = cur.fetchall()
+
+                    # Immobili (senza civico, rimosso in script 22)
+                    cur.execute(f"""
+                        SELECT i.id, i.natura, i.numero_piani, i.numero_vani,
+                               i.consistenza, i.classificazione,
+                               tl.nome AS tipo_localita,
+                               l.nome AS nome_localita
+                        FROM {s}.immobile i
+                        JOIN {s}.localita l ON i.localita_id = l.id
+                        LEFT JOIN {s}.tipo_localita tl ON l.tipo_id = tl.id
+                        WHERE i.partita_id = %s
+                        ORDER BY l.nome, i.natura
+                    """, (partita_id,))
+                    immobili = cur.fetchall()
+
+                    # Variazioni
+                    cur.execute(f"""
+                        SELECT v.tipo, v.data_variazione, p2.numero_partita AS partita_dest,
+                               c2.nome AS comune_dest,
+                               con.tipo AS tipo_contratto, con.data_contratto,
+                               con.notaio, con.repertorio
+                        FROM {s}.variazione v
+                        LEFT JOIN {s}.partita p2 ON v.partita_destinazione_id = p2.id
+                        LEFT JOIN {s}.comune c2 ON p2.comune_id = c2.id
+                        LEFT JOIN {s}.contratto con ON v.id = con.variazione_id
+                        WHERE v.partita_origine_id = %s
+                        ORDER BY v.data_variazione DESC
+                    """, (partita_id,))
+                    variazioni = cur.fetchall()
+
+            sep = "=" * 60
+            sep2 = "-" * 20
+            r = f"{sep}\n                REPORT PROPRIETA IMMOBILIARE\n"
+            r += f"                     CATASTO STORICO ANNI '50\n{sep}\n\n"
+            r += f"COMUNE: {partita['comune_nome']}\n"
+            r += f"PARTITA N.: {partita['numero_partita']}\n"
+            r += f"TIPO: {partita['tipo']}\n"
+            r += f"DATA IMPIANTO: {partita['data_impianto'] or 'N/D'}\n"
+            r += f"STATO: {partita['stato']}\n"
+            if partita['data_chiusura']:
+                r += f"DATA CHIUSURA: {partita['data_chiusura']}\n"
+            if partita['numero_provenienza']:
+                r += f"PROVENIENZA: Partita n. {partita['numero_provenienza']}\n"
+            r += "\n"
+
+            r += f"{sep2} INTESTATARI {sep2}\n"
+            for p in possessori:
+                r += f"- {p['nome_completo']}"
+                if p['titolo'] == 'comproprieta' and p['quota']:
+                    r += f" (quota: {p['quota']})"
+                r += "\n"
+            r += "\n"
+
+            r += f"{sep2} IMMOBILI {sep2}\n"
+            for i in immobili:
+                r += f"Immobile ID: {i['id']}\n"
+                r += f"  Natura: {i['natura'] or 'N/D'}\n"
+                loc = i['nome_localita'] or 'N/D'
+                tipo_loc = i['tipo_localita'] or 'N/D'
+                r += f"  Localita: {loc} ({tipo_loc})\n"
+                if i['numero_piani']:
+                    r += f"  Piani: {i['numero_piani']}\n"
+                if i['numero_vani']:
+                    r += f"  Vani: {i['numero_vani']}\n"
+                if i['consistenza']:
+                    r += f"  Consistenza: {i['consistenza']}\n"
+                if i['classificazione']:
+                    r += f"  Classificazione: {i['classificazione']}\n"
+                r += "\n"
+
+            r += f"{sep2} VARIAZIONI {sep2}\n"
+            for v in variazioni:
+                r += f"Variazione: {v['tipo'] or 'N/D'} del {v['data_variazione'] or 'N/D'}\n"
+                if v['partita_dest']:
+                    r += f"  Nuova partita: {v['partita_dest']} (Comune: {v['comune_dest'] or 'N/D'})\n"
+                if v['tipo_contratto']:
+                    r += f"  Contratto: {v['tipo_contratto']} del {v['data_contratto'] or 'N/D'}\n"
+                    if v['notaio']:
+                        r += f"  Notaio: {v['notaio']}\n"
+                    if v['repertorio']:
+                        r += f"  Repertorio: {v['repertorio']}\n"
+                r += "\n"
+
+            r += f"{sep}\n"
+            r += f"Report generato il: {date.today()}\n"
+            r += "Il presente report ha valore puramente storico e documentale.\n"
+            r += f"{sep}\n"
+
+            self.logger.info(f"Report di proprietà generato per partita ID {partita_id}.")
+            return r
+
         except Exception as e:
             self.logger.error(f"Errore DB in genera_report_proprieta (ID: {partita_id}): {e}", exc_info=True)
             return None
