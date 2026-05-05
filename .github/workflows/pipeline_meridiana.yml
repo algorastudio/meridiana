@@ -69,6 +69,7 @@ jobs:
         psql -h localhost -U postgres -d catasto_storico -f sql_scripts/21_soft_delete.sql
         psql -h localhost -U postgres -d catasto_storico -f sql_scripts/22_drop_civico_localita.sql
         psql -h localhost -U postgres -d catasto_storico -f sql_scripts/23_titoli_possesso.sql
+        psql -h localhost -U postgres -d catasto_storico -f sql_scripts/24_fix_civico_references.sql
 
     - name: Esecuzione Test Automatici (Pytest)
       env:
