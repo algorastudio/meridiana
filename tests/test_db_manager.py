@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Test suite completa per CatastoDBManager — v1.2.1
+Test suite completa per CatastoDBManager — v1.3.0
 Copertura massima: CRUD, soft delete, validazione, import CSV, ricerca avanzata
 """
 import pytest
@@ -816,7 +816,7 @@ class TestDashboard:
 
 
 # ===========================================================================
-# Test bug fixes v1.2.1 - tipo_localita migration
+# Test bug fixes v1.3.0 - tipo_localita migration
 # ===========================================================================
 
 class TestBugFixesTipoLocalita:

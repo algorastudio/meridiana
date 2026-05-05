@@ -146,7 +146,7 @@ Per migrazioni su DB esistenti, eseguire solo gli script nuovi.
 
 ## Test
 
-### Test suite completa (v1.2.1)
+### Test suite completa (v1.3.0)
 
 **File principale**: `tests/test_db_manager.py` (855 linee, 100+ test methods)
 
@@ -195,8 +195,8 @@ pytest tests/test_db_manager.py --cov=catasto_db_manager --cov-report=html
 La CI/CD (GitHub Actions) genera automaticamente l'installer su tag `v*`:
 
 ```bash
-git tag v1.2.1
-git push origin v1.2.1
+git tag v1.3.0
+git push origin v1.3.0
 ```
 
 Per build manuale locale (su Windows):
@@ -271,7 +271,7 @@ self.immobili_data.append({
 
 ---
 
-## Bug fix noti (v1.2.1)
+## Bug fix noti (v1.3.0)
 
 ### Migrazione tipo_localita (Script 20)
 

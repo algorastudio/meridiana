@@ -43,7 +43,7 @@ class LoginDialog(QDialog):
         # NUOVO attributo per conservare l'UUID
         self.current_session_id_from_dialog: Optional[str] = None
 
-        self.setWindowTitle("Login - Meridiana 1.2.1")
+        self.setWindowTitle("Login - Meridiana 1.3.0")
         self.setMinimumWidth(350)
         self.setModal(True)
 

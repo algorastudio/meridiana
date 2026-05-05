@@ -2,7 +2,7 @@
 
 ## Descrizione
 
-Script SQL (`99_performance_test_data.sql`) per generare una base dati realistica di performance testing per **Meridiana v1.2.1**.
+Script SQL (`99_performance_test_data.sql`) per generare una base dati realistica di performance testing per **Meridiana v1.3.0**.
 
 ### Dati Generati
 
@@ -289,4 +289,4 @@ Come il resto di Meridiana — concesso in comodato gratuito all'Archivio di Sta
 
 ---
 
-*Generato da Claude Code per Meridiana v1.2.1 - Performance Testing Framework*
+*Generato da Claude Code per Meridiana v1.3.0 - Performance Testing Framework*
