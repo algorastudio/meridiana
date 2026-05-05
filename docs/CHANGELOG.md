@@ -1,5 +1,24 @@
 # Changelog — Meridiana
 
+## [1.3.1] — 2026-05-05
+
+### Bug fix: visualizzazione risultati ricerca partite
+
+- **`dialogs.py` – `PartitaSearchDialog.do_search()`**: corretto accesso ai dati con `.get()` invece di `getattr()` sui dizionari restituiti da `search_partite()` — il dialog mostrava le righe ma le celle erano vuote (invisibili) perché `getattr(dict, 'key')` restituisce sempre `''` su un dizionario
+- **`dialogs.py` – `ModificaPartitaDialog._load_variazioni_associati()`**: corretti gli alias SQL (`partita_origine_numero` → `origine_numero_partita`, `comune_origine` → `origine_comune_nome`, ecc.) che causavano celle vuote nel tab Variazioni
+- **`dialogs.py` – `PartitaDetailsDialog._generate_partita_text_report()`**: stessa correzione alias SQL per il report testuale della partita
+
+### Bug fix: avviso QSS box-shadow
+
+- Rimossa (commentata) la proprietà CSS `box-shadow` non supportata da Qt in 6 file di temi grafici: `azzurro_ligure.qss`, `ocean_blue_stylesheet.qss`, `nature_green_stylesheet.qss`, `classic_business_stylesheet.qss`, `purple_royal_stylesheet.qss`, `sunset_orange_stylesheet.qss`. Eliminava l'avviso "Unknown property box-shadow" al log di avvio.
+
+### Documentazione
+
+- Riscritto completamente il **Manuale Utente** (`resources/manuale_utente.pdf`, 27 pagine): copre tutte le funzionalità implementate nelle versioni 1.0 – 1.3.0
+- Aggiunto script `genera_manuale.py` per rigenerare il manuale PDF in locale
+
+---
+
 ## [1.3.0] — 2026-04-29
 
 Versione che completa la **migrazione del data access layer** da dizionari Python a Dataclass tipizzati.
