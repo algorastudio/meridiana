@@ -3031,10 +3031,13 @@ class PartiteComuneDialog(QDialog):
         self.comune_id = comune_id
         self.nome_comune = nome_comune
         self.logger = logging.getLogger(f"CatastoGUI.{self.__class__.__name__}")
+        self.current_page = 1
+        self.page_size = 50
+        self.total_records = 0
 
         self.setWindowTitle(
             f"Partite del Comune di {self.nome_comune} (ID: {self.comune_id})")
-        self.setMinimumSize(850, 550)
+        self.setMinimumSize(850, 600)
 
         layout = QVBoxLayout(self)
 
@@ -3042,14 +3045,36 @@ class PartiteComuneDialog(QDialog):
         filter_label = QLabel("Filtra partite:")
         self.filter_edit = QLineEdit()
         self.filter_edit.setPlaceholderText("Digita per filtrare (numero, tipo, stato, suffisso)...")
-        
+
         self.filter_button = QPushButton("Applica Filtro")
-        self.filter_button.clicked.connect(self.load_partite_data)
-        
+        self.filter_button.clicked.connect(self._reset_and_load)
+
         filter_layout.addWidget(filter_label)
         filter_layout.addWidget(self.filter_edit)
         filter_layout.addWidget(self.filter_button)
         layout.addLayout(filter_layout)
+
+        # Pannello paginazione
+        pagination_layout = QHBoxLayout()
+        self.btn_prev_page = QPushButton("◄ Precedente")
+        self.btn_prev_page.clicked.connect(self._prev_page)
+        self.lbl_page_info = QLabel("Pagina 1 di 1")
+        self.lbl_page_info.setAlignment(Qt.AlignCenter)
+        self.combo_page_size = QComboBox()
+        self.combo_page_size.addItems(["25", "50", "100", "500"])
+        self.combo_page_size.setCurrentText("50")
+        self.combo_page_size.currentTextChanged.connect(self._change_page_size)
+        self.btn_next_page = QPushButton("Successiva ►")
+        self.btn_next_page.clicked.connect(self._next_page)
+        pagination_layout.addStretch()
+        pagination_layout.addWidget(self.btn_prev_page)
+        pagination_layout.addWidget(self.lbl_page_info)
+        pagination_layout.addSpacing(20)
+        pagination_layout.addWidget(QLabel("Righe per pagina:"))
+        pagination_layout.addWidget(self.combo_page_size)
+        pagination_layout.addWidget(self.btn_next_page)
+        pagination_layout.addStretch()
+        layout.addLayout(pagination_layout)
 
         self.partite_table = QTableWidget()
         
@@ -3095,36 +3120,64 @@ class PartiteComuneDialog(QDialog):
         self.setLayout(layout)
         self.load_partite_data()
 
+    def _reset_and_load(self):
+        self.current_page = 1
+        self.load_partite_data()
+
+    def _prev_page(self):
+        if self.current_page > 1:
+            self.current_page -= 1
+            self.load_partite_data()
+
+    def _next_page(self):
+        import math
+        total_pages = max(1, math.ceil(self.total_records / self.page_size))
+        if self.current_page < total_pages:
+            self.current_page += 1
+            self.load_partite_data()
+
+    def _change_page_size(self, new_size_str):
+        self.page_size = int(new_size_str)
+        self.current_page = 1
+        self.load_partite_data()
+
+    def _update_pagination_ui(self):
+        import math
+        total_pages = max(1, math.ceil(self.total_records / self.page_size))
+        self.lbl_page_info.setText(f"Pagina {self.current_page} di {total_pages} (Totale: {self.total_records})")
+        self.btn_prev_page.setEnabled(self.current_page > 1)
+        self.btn_next_page.setEnabled(self.current_page < total_pages)
+
     def load_partite_data(self):
         self.partite_table.setRowCount(0)
         self.partite_table.setSortingEnabled(False)
-        
-        # Le intestazioni sono già state impostate nell'__init__
-        # Non è necessario reimpostarle qui.
 
-        filter_text = self.filter_edit.text().strip()
+        filter_text = self.filter_edit.text().strip() or None
+        offset = (self.current_page - 1) * self.page_size
 
         try:
-            partite_list = self.db_manager.get_partite_by_comune(
-                self.comune_id, filter_text=filter_text if filter_text else None
+            partite_list, totale = self.db_manager.get_partite_by_comune_paginate(
+                comune_id=self.comune_id,
+                limit=self.page_size,
+                offset=offset,
+                filter_text=filter_text
             )
+            self.total_records = totale
 
             if partite_list:
                 self.partite_table.setRowCount(len(partite_list))
                 for row_idx, partita in enumerate(partite_list):
                     col = 0
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.id))); col += 1
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.numero_partita))); col += 1
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.suffisso_partita or '')); col += 1 
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.tipo or '')); col += 1
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.stato or '')); col += 1
-                    data_imp = partita.data_impianto
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('id', '')))); col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('numero_partita', '')))); col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('suffisso_partita') or '')); col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('tipo') or '')); col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(partita.get('stato') or '')); col += 1
+                    data_imp = partita.get('data_impianto')
                     self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(data_imp) if data_imp else '')); col += 1
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.num_possessori or '0'))); col += 1
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.num_immobili or '0'))); col += 1
-                    
-                    # --- NUOVA RIGA PER IL NUMERO DEI DOCUMENTI ---
-                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.num_documenti_allegati or '0'))); col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('num_possessori') or '0'))); col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('num_immobili') or '0'))); col += 1
+                    self.partite_table.setItem(row_idx, col, QTableWidgetItem(str(partita.get('num_documenti_allegati') or '0'))); col += 1
 
                 self.partite_table.resizeColumnsToContents()
             else:
@@ -3145,6 +3198,7 @@ class PartiteComuneDialog(QDialog):
             self.partite_table.setSpan(0, 0, 1, self.partite_table.columnCount())
         finally:
             self.partite_table.setSortingEnabled(True)
+            self._update_pagination_ui()
             self._aggiorna_stato_pulsante_modifica()
 
     def _aggiorna_stato_pulsante_modifica(self):
