@@ -1,8 +1,9 @@
 from dataclasses import dataclass, field
 from typing import Optional, Any
+from models.base import DictCompatMixin
 
 @dataclass
-class Localita:
+class Localita(DictCompatMixin):
     id: int
     nome: str
     comune_id: Optional[int] = None

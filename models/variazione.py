@@ -1,9 +1,10 @@
 from dataclasses import dataclass, field
 from typing import Optional, Any
 from datetime import date
+from models.base import DictCompatMixin
 
 @dataclass
-class Variazione:
+class Variazione(DictCompatMixin):
     id: int
     tipo: str
     data_variazione: Optional[date] = None

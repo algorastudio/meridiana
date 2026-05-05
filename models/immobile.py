@@ -1,9 +1,10 @@
 from dataclasses import dataclass, field
 from typing import Optional, Any
 from datetime import datetime
+from models.base import DictCompatMixin
 
 @dataclass
-class Immobile:
+class Immobile(DictCompatMixin):
     id: int
     natura: str
     partita_id: Optional[int] = None

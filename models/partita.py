@@ -1,9 +1,10 @@
 from dataclasses import dataclass, field
 from typing import Optional, Any, List
 from datetime import date, datetime
+from models.base import DictCompatMixin
 
 @dataclass
-class Partita:
+class Partita(DictCompatMixin):
     id: int
     comune_id: int
     numero_partita: int
