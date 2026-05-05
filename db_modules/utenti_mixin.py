@@ -209,32 +209,218 @@ class UtentiMixin:
 
     
     def get_user_credentials(self, username: str) -> Optional[Dict]:
-        """
-        Recupera le credenziali e le informazioni di base dell'utente dal database.
-        Utilizza il pattern 'with' per una gestione sicura della connessione.
-        """
+        """Recupera credenziali e campi di sicurezza dell'utente dal database."""
         if not username:
             return None
-        
-        # Adattato per usare il context manager _get_connection
-        sql = f"""
-            SELECT id, username, password_hash, nome_completo, ruolo, attivo
+
+        query = f"""
+            SELECT id, username, password_hash, nome_completo, ruolo, attivo,
+                   failed_attempts, locked_until, password_must_change, password_changed_at
             FROM {self.schema}.utente
             WHERE username = %s;
         """
         try:
-            # --- CORREZIONE CRUCIALE: Uso del 'with' statement ---
             with self._get_connection() as conn:
-                # Uso del DictCursor per ottenere risultati come dizionari
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-                    cur.execute(sql, (username,))
+                    cur.execute(query, (username,))
                     user_data = cur.fetchone()
                     if user_data:
                         return dict(user_data)
             return None
         except Exception as e:
-            self.logger.error(f"Errore durante il recupero delle credenziali per l'utente '{username}': {e}", exc_info=True)
+            self.logger.error(f"Errore durante il recupero delle credenziali per '{username}': {e}", exc_info=True)
             return None
+
+    def get_security_config(self) -> Dict[str, Any]:
+        """Restituisce la configurazione di sicurezza come dizionario chiave→valore (int dove possibile)."""
+        defaults = {
+            'max_tentativi_falliti': 5,
+            'durata_blocco_minuti': 15,
+            'min_lunghezza_password': 12,
+            'storico_password': 5,
+            'richiedi_maiuscole': 1,
+            'richiedi_numeri': 1,
+            'richiedi_speciali': 1,
+        }
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                    cur.execute(f"SELECT chiave, valore FROM {self.schema}.config_sicurezza;")
+                    for row in cur.fetchall():
+                        try:
+                            defaults[row['chiave']] = int(row['valore'])
+                        except (ValueError, TypeError):
+                            defaults[row['chiave']] = row['valore']
+        except Exception as e:
+            self.logger.warning(f"Impossibile leggere config_sicurezza, uso valori default: {e}")
+        return defaults
+
+    def record_failed_login(self, utente_id: int) -> Dict[str, Any]:
+        """
+        Incrementa il contatore tentativi falliti.
+        Se raggiunge il limite, imposta locked_until.
+        Restituisce {'bloccato': bool, 'tentativi': int, 'locked_until': datetime|None}.
+        """
+        cfg = self.get_security_config()
+        max_tentativi = cfg.get('max_tentativi_falliti', 5)
+        durata_minuti = cfg.get('durata_blocco_minuti', 15)
+
+        query = f"""
+            UPDATE {self.schema}.utente
+            SET failed_attempts = failed_attempts + 1,
+                locked_until = CASE
+                    WHEN (failed_attempts + 1) >= %s
+                    THEN NOW() + (%s || ' minutes')::INTERVAL
+                    ELSE locked_until
+                END
+            WHERE id = %s
+            RETURNING failed_attempts, locked_until;
+        """
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                    cur.execute(query, (max_tentativi, durata_minuti, utente_id))
+                    row = cur.fetchone()
+                    if row:
+                        return {
+                            'bloccato': row['locked_until'] is not None,
+                            'tentativi': row['failed_attempts'],
+                            'locked_until': row['locked_until'],
+                        }
+        except Exception as e:
+            self.logger.error(f"Errore in record_failed_login per utente {utente_id}: {e}", exc_info=True)
+        return {'bloccato': False, 'tentativi': 0, 'locked_until': None}
+
+    def reset_failed_attempts(self, utente_id: int) -> bool:
+        """Azzera tentativi falliti e blocco dopo login riuscito. Aggiorna ultimo_accesso."""
+        query = f"""
+            UPDATE {self.schema}.utente
+            SET failed_attempts = 0,
+                locked_until    = NULL,
+                ultimo_accesso  = NOW()
+            WHERE id = %s;
+        """
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query, (utente_id,))
+            return True
+        except Exception as e:
+            self.logger.error(f"Errore in reset_failed_attempts per utente {utente_id}: {e}", exc_info=True)
+            return False
+
+    def unlock_user(self, utente_id: int) -> bool:
+        """Admin sblocca manualmente un utente (azzera contatore e locked_until)."""
+        query = f"""
+            UPDATE {self.schema}.utente
+            SET failed_attempts = 0,
+                locked_until    = NULL
+            WHERE id = %s;
+        """
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(query, (utente_id,))
+                    if cur.rowcount == 0:
+                        raise DBNotFoundError(f"Utente con ID {utente_id} non trovato.")
+            self.logger.info(f"Utente ID {utente_id} sbloccato manualmente.")
+            return True
+        except DBNotFoundError as e:
+            self.logger.warning(e)
+            raise
+        except Exception as e:
+            self.logger.error(f"Errore in unlock_user per utente {utente_id}: {e}", exc_info=True)
+            raise DBMError(f"Impossibile sbloccare l'utente: {e}") from e
+
+    def check_password_in_history(self, utente_id: int, new_hash: str, provided_password: str) -> bool:
+        """
+        Controlla se la password fornita è già presente negli ultimi N hash dello storico.
+        Restituisce True se la password è già stata usata (non consentita).
+        """
+        import bcrypt
+        cfg = self.get_security_config()
+        storico_n = cfg.get('storico_password', 5)
+        query = f"""
+            SELECT password_hash FROM {self.schema}.password_history
+            WHERE utente_id = %s
+            ORDER BY changed_at DESC
+            LIMIT %s;
+        """
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                    cur.execute(query, (utente_id, storico_n))
+                    for row in cur.fetchall():
+                        stored = row['password_hash']
+                        try:
+                            if bcrypt.checkpw(provided_password.encode('utf-8'), stored.encode('utf-8')):
+                                return True
+                        except Exception:
+                            pass
+        except Exception as e:
+            self.logger.error(f"Errore check_password_in_history per utente {utente_id}: {e}", exc_info=True)
+        return False
+
+    def update_password_with_history(self, utente_id: int, new_hash: str,
+                                      provided_password: str,
+                                      force_change: bool = False) -> bool:
+        """
+        Aggiorna la password applicando la policy di storico.
+        - Verifica che la password non sia tra le ultime N
+        - Aggiunge la vecchia password allo storico prima di aggiornare
+        - Reimposta password_must_change = FALSE
+        - Aggiorna password_changed_at
+        Solleva DBDataError se la password è già stata usata.
+        """
+        if self.check_password_in_history(utente_id, new_hash, provided_password):
+            cfg = self.get_security_config()
+            n = cfg.get('storico_password', 5)
+            raise DBDataError(
+                f"La password scelta e' gia' stata usata di recente. "
+                f"Scegli una password diversa dalle ultime {n}."
+            )
+
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    # Aggiungi al storico
+                    cur.execute(
+                        f"INSERT INTO {self.schema}.password_history (utente_id, password_hash) VALUES (%s, %s);",
+                        (utente_id, new_hash)
+                    )
+                    # Aggiorna la password
+                    cur.execute(
+                        f"""UPDATE {self.schema}.utente
+                            SET password_hash = %s,
+                                password_must_change = FALSE,
+                                password_changed_at  = NOW(),
+                                data_modifica        = NOW()
+                            WHERE id = %s;""",
+                        (new_hash, utente_id)
+                    )
+                    if cur.rowcount == 0:
+                        raise DBNotFoundError(f"Utente {utente_id} non trovato durante aggiornamento password.")
+            self.logger.info(f"Password aggiornata con storico per utente ID {utente_id}.")
+            return True
+        except (DBDataError, DBNotFoundError):
+            raise
+        except Exception as e:
+            self.logger.error(f"Errore update_password_with_history per utente {utente_id}: {e}", exc_info=True)
+            raise DBMError(f"Impossibile aggiornare la password: {e}") from e
+
+    def set_password_must_change(self, utente_id: int, must_change: bool = True) -> bool:
+        """Imposta il flag password_must_change per un utente (usato dopo reset admin)."""
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        f"UPDATE {self.schema}.utente SET password_must_change = %s WHERE id = %s;",
+                        (must_change, utente_id)
+                    )
+            return True
+        except Exception as e:
+            self.logger.error(f"Errore set_password_must_change per utente {utente_id}: {e}", exc_info=True)
+            return False
 
     # Metodo ESISTENTE da MODIFICARE
     def register_access(self, user_id: int, action: str, esito: bool,
@@ -363,7 +549,11 @@ class UtentiMixin:
             return []
     def get_utenti(self, solo_attivi: Optional[bool] = None) -> List[Dict[str, Any]]:
         """Recupera un elenco di utenti in modo sicuro, con filtro opzionale."""
-        query = f"SELECT id, username, nome_completo, email, ruolo, attivo, ultimo_accesso FROM {self.schema}.utente"
+        query = f"""
+            SELECT id, username, nome_completo, email, ruolo, attivo, ultimo_accesso,
+                   failed_attempts, locked_until, password_must_change
+            FROM {self.schema}.utente
+        """
         params = []
 
         if solo_attivi is not None:
