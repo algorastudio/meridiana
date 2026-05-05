@@ -12,6 +12,12 @@ import uuid
 import os
 import shutil # Per trovare i percorsi degli eseguibili
 from contextlib import contextmanager
+from db_modules.base_manager import (
+    DBMError,
+    DBUniqueConstraintError,
+    DBNotFoundError,
+    DBDataError
+)
 from PyQt5.QtWidgets import (QAbstractItemView, QAction, QApplication, 
                              QCheckBox, QComboBox, QDateEdit, QDateTimeEdit,
                              QDialog, QDialogButtonBox, QDoubleSpinBox,
@@ -30,22 +36,6 @@ from PyQt5.QtCore import (QDate, QDateTime, QPoint, QProcess, QSettings,
 COLONNE_POSSESSORI_DETTAGLI_NUM = 6 # Esempio: ID, Nome Compl, Cognome/Nome, Paternità, Quota, Titolo
 COLONNE_POSSESSORI_DETTAGLI_LABELS = ["ID Poss.", "Nome Completo", "Cognome Nome", "Paternità", "Quota", "Titolo"]
 logger = logging.getLogger(__name__)
-class DBMError(Exception):
-    """Classe base per errori specifici del DBManager."""
-    pass
-class DBUniqueConstraintError(DBMError):
-    """Sollevata quando un vincolo di unicità viene violato."""
-    def __init__(self, message, constraint_name=None, details=None):
-        super().__init__(message)
-        self.constraint_name = constraint_name
-        self.details = details
-class DBNotFoundError(DBMError):
-    """Sollevata quando un record atteso non viene trovato per un'operazione."""
-    pass
-class DBDataError(DBMError):
-    """Sollevata per errori relativi a dati o parametri forniti non validi."""
-    pass
-
 class TipologicheMixin:
     def get_tipi_localita(self) -> List[Dict[str, Any]]:
         """Recupera tutte le tipologie di località disponibili."""
