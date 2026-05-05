@@ -22,7 +22,6 @@ AppId={{51E4F5FB-B2AB-4D5F-A1B2-C7D9E8F1A2B3}}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
-AllowConcurrentInstallation=no
 ; Specifica dove salvare l'installer finale e come chiamarlo.
 OutputDir=Installer
 OutputBaseFilename=Meridiana_{#MyAppVersion}_Setup
@@ -32,7 +31,6 @@ Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
-UninstallLogMode=append
 
 ; --- INFORMAZIONI DI VERSIONE INCLUSE NELL'ESEGUIBILE DELL'INSTALLER ---
 VersionInfoVersion={#MyAppVersion}
