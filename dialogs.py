@@ -39,8 +39,10 @@ from app_paths import get_resource_path
 # Importazione commentata (da abilitare se necessario)
 # from PyQt5.QtSvgWidgets import QSvgWidget
 from config import (
-    SETTINGS_DB_TYPE, SETTINGS_DB_HOST, SETTINGS_DB_PORT, 
-    SETTINGS_DB_NAME, SETTINGS_DB_USER, SETTINGS_DB_SCHEMA,SETTINGS_DB_PASSWORD
+    SETTINGS_DB_TYPE, SETTINGS_DB_HOST, SETTINGS_DB_PORT,
+    SETTINGS_DB_NAME, SETTINGS_DB_USER, SETTINGS_DB_SCHEMA, SETTINGS_DB_PASSWORD,
+    SETTINGS_SSH_ENABLED, SETTINGS_SSH_HOST, SETTINGS_SSH_PORT,
+    SETTINGS_SSH_USER, SETTINGS_SSH_USE_KEY, SETTINGS_SSH_KEY_PATH,
 )
 from catasto_db_manager import CatastoDBManager
 
@@ -165,8 +167,76 @@ class DBConfigDialog(QDialog):
 
         
         layout.addLayout(form_layout)
+
+        # --- Sezione Tunnel SSH ---
+        ssh_group = QGroupBox("Tunnel SSH (Accesso Remoto Sicuro)")
+        ssh_group_layout = QVBoxLayout(ssh_group)
+
+        self.ssh_enabled_check = QCheckBox("Abilita tunnel SSH (consigliato per accesso da casa)")
+        ssh_group_layout.addWidget(self.ssh_enabled_check)
+
+        ssh_form = QFormLayout()
+
+        self.ssh_host_edit = QLineEdit()
+        self.ssh_host_edit.setPlaceholderText("es. server.archivio.it  o  192.168.1.x")
+        self.ssh_port_spinbox = QSpinBox()
+        self.ssh_port_spinbox.setRange(1, 65535)
+        self.ssh_port_spinbox.setValue(22)
+        self.ssh_user_edit = QLineEdit()
+        self.ssh_user_edit.setPlaceholderText("utente SSH sul server")
+
+        self.ssh_auth_password_radio = QRadioButton("Password SSH")
+        self.ssh_auth_key_radio = QRadioButton("Chiave privata (.pem / .ppk)")
+        self.ssh_auth_password_radio.setChecked(True)
+        ssh_auth_layout = QHBoxLayout()
+        ssh_auth_layout.addWidget(self.ssh_auth_password_radio)
+        ssh_auth_layout.addWidget(self.ssh_auth_key_radio)
+
+        self.ssh_password_edit = QPasswordLineEdit()
+        self.ssh_key_path_edit = QLineEdit()
+        self.ssh_key_path_edit.setPlaceholderText("Percorso file chiave privata")
+        self.ssh_key_browse_btn = QPushButton("Sfoglia…")
+        ssh_key_layout = QHBoxLayout()
+        ssh_key_layout.addWidget(self.ssh_key_path_edit)
+        ssh_key_layout.addWidget(self.ssh_key_browse_btn)
+
+        self._ssh_host_label = QLabel("Host SSH:")
+        self._ssh_port_label = QLabel("Porta SSH:")
+        self._ssh_user_label = QLabel("Utente SSH:")
+        self._ssh_auth_label = QLabel("Autenticazione:")
+        self._ssh_pass_label  = QLabel("Password SSH:")
+        self._ssh_key_label   = QLabel("Chiave privata:")
+
+        ssh_form.addRow(self._ssh_host_label, self.ssh_host_edit)
+        ssh_form.addRow(self._ssh_port_label, self.ssh_port_spinbox)
+        ssh_form.addRow(self._ssh_user_label, self.ssh_user_edit)
+        ssh_form.addRow(self._ssh_auth_label, ssh_auth_layout)
+        ssh_form.addRow(self._ssh_pass_label,  self.ssh_password_edit)
+        ssh_form.addRow(self._ssh_key_label,   ssh_key_layout)
+
+        ssh_group_layout.addLayout(ssh_form)
+        layout.addWidget(ssh_group)
+
+        # Segnali SSH
+        self.ssh_enabled_check.toggled.connect(self._toggle_ssh_fields)
+        self.ssh_auth_password_radio.toggled.connect(self._toggle_ssh_auth_type)
+        self.ssh_key_browse_btn.clicked.connect(self._browse_ssh_key)
+
+        # Pre-compilazione SSH da QSettings
+        self.ssh_enabled_check.setChecked(self.settings.value(SETTINGS_SSH_ENABLED, False, type=bool))
+        self.ssh_host_edit.setText(self.settings.value(SETTINGS_SSH_HOST, "", type=str))
+        self.ssh_port_spinbox.setValue(self.settings.value(SETTINGS_SSH_PORT, 22, type=int))
+        self.ssh_user_edit.setText(self.settings.value(SETTINGS_SSH_USER, "", type=str))
+        if self.settings.value(SETTINGS_SSH_USE_KEY, False, type=bool):
+            self.ssh_auth_key_radio.setChecked(True)
+        self.ssh_key_path_edit.setText(self.settings.value(SETTINGS_SSH_KEY_PATH, "", type=str))
+
+        self._toggle_ssh_fields()
+        self._toggle_ssh_auth_type()
+        # --- Fine Sezione Tunnel SSH ---
+
         layout.addWidget(buttons)
-        
+
         # --- Connessioni e Pre-compilazione ---
         self.local_radio.toggled.connect(self._toggle_host_field) # Collega al nuovo metodo
         
@@ -190,10 +260,40 @@ class DBConfigDialog(QDialog):
         Abilita o disabilita il campo di testo dell'host in base alla selezione
         del radio button per la connessione locale/remota.
         """
-        # Il campo dell'host è visibile solo se è selezionato "Remoto"
         is_remote = self.remote_radio.isChecked()
         self.host_label.setVisible(is_remote)
         self.host_edit.setVisible(is_remote)
+
+    def _toggle_ssh_fields(self):
+        """Abilita/disabilita i campi SSH in base alla checkbox principale."""
+        enabled = self.ssh_enabled_check.isChecked()
+        for widget in (
+            self.ssh_host_edit, self.ssh_port_spinbox, self.ssh_user_edit,
+            self.ssh_auth_password_radio, self.ssh_auth_key_radio,
+            self.ssh_password_edit, self.ssh_key_path_edit, self.ssh_key_browse_btn,
+            self._ssh_host_label, self._ssh_port_label, self._ssh_user_label,
+            self._ssh_auth_label, self._ssh_pass_label, self._ssh_key_label,
+        ):
+            widget.setEnabled(enabled)
+        if enabled:
+            self._toggle_ssh_auth_type()
+
+    def _toggle_ssh_auth_type(self):
+        """Mostra password o chiave in base al radio button selezionato."""
+        enabled = self.ssh_enabled_check.isChecked()
+        use_pass = self.ssh_auth_password_radio.isChecked()
+        self.ssh_password_edit.setEnabled(enabled and use_pass)
+        self.ssh_key_path_edit.setEnabled(enabled and not use_pass)
+        self.ssh_key_browse_btn.setEnabled(enabled and not use_pass)
+
+    def _browse_ssh_key(self):
+        """Apre il selettore file per la chiave privata SSH."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Seleziona chiave privata SSH", "",
+            "Chiavi SSH (*.pem *.ppk *.key *.rsa);;Tutti i file (*)"
+        )
+        if path:
+            self.ssh_key_path_edit.setText(path)
     def _load_settings(self):
         """Carica le impostazioni da QSettings, usando self.default_preset_config come fallback."""
         config_to_load = {}
@@ -254,29 +354,80 @@ class DBConfigDialog(QDialog):
 
     def _handle_save_and_connect(self):
         """
-        Recupera i valori, testa la connessione, salva le impostazioni
-        e chiude il dialogo se tutto va a buon fine.
+        Testa il tunnel SSH (se abilitato) e poi la connessione DB.
+        Salva le impostazioni e chiude il dialogo solo in caso di successo.
         """
+        from ssh_tunnel import start_ssh_tunnel, stop_ssh_tunnel, SSH_TUNNEL_AVAILABLE
+
         config = self.get_config_values(include_password=True)
-        
-        # Testa la connessione con i nuovi parametri
-        test_db_manager = CatastoDBManager(
-            host=config["host"],
-            port=config["port"],
-            dbname=config["dbname"],
-            user=config["user"],
-            password=config["password"]
-        )
-        
-        # --- INIZIO CORREZIONE ---
-        # Usiamo il metodo corretto per testare la connessione e inizializzare il pool
-        if test_db_manager.initialize_main_pool():
-        # --- FINE CORREZIONE ---
+
+        # --- Test tunnel SSH ---
+        test_host = config["host"]
+        test_port = config["port"]
+        tunnel_started = False
+
+        if config.get("ssh_enabled"):
+            if not SSH_TUNNEL_AVAILABLE:
+                QMessageBox.critical(
+                    self, "Tunnel SSH non disponibile",
+                    "La libreria 'sshtunnel' non è installata.\n"
+                    "Esegui: pip install sshtunnel"
+                )
+                return
+
+            ssh_password = config.get("ssh_password", "") if not config.get("ssh_use_key") else None
+            ssh_key_path = config.get("ssh_key_path") if config.get("ssh_use_key") else None
+
+            if not config.get("ssh_host") or not config.get("ssh_user"):
+                QMessageBox.warning(self, "Dati SSH mancanti",
+                                    "Inserire host SSH e utente SSH per usare il tunnel.")
+                return
+
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            local_port = start_ssh_tunnel(
+                ssh_host=config["ssh_host"],
+                ssh_port=config["ssh_port"],
+                ssh_user=config["ssh_user"],
+                remote_db_host=config["host"],
+                remote_db_port=config["port"],
+                ssh_password=ssh_password,
+                ssh_key_path=ssh_key_path,
+            )
+            QApplication.restoreOverrideCursor()
+
+            if local_port is None:
+                stop_ssh_tunnel()
+                QMessageBox.critical(
+                    self, "Errore Tunnel SSH",
+                    "Impossibile aprire il tunnel SSH.\n"
+                    "Controlla host, porta, utente e credenziali SSH."
+                )
+                return
+
+            test_host = "127.0.0.1"
+            test_port = local_port
+            tunnel_started = True
+
+        # --- Test connessione DB ---
+        try:
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            test_db_manager = CatastoDBManager(
+                host=test_host,
+                port=test_port,
+                dbname=config["dbname"],
+                user=config["user"],
+                password=config["password"],
+            )
+            connection_ok = test_db_manager.initialize_main_pool()
+        finally:
+            QApplication.restoreOverrideCursor()
+            if tunnel_started:
+                stop_ssh_tunnel()
+
+        if connection_ok:
             self.logger.info("Test di connessione riuscito.")
-            
-            # Se il test ha successo, salva le impostazioni
             settings = QSettings()
-            
+
             if self.remote_radio.isChecked():
                 settings.setValue("Database/Type", "remote")
                 settings.setValue("Database/Host", config["host"])
@@ -287,21 +438,28 @@ class DBConfigDialog(QDialog):
             settings.setValue("Database/Port", config["port"])
             settings.setValue("Database/DBName", config["dbname"])
             settings.setValue("Database/User", config["user"])
-            
+
             if config.get("save_password", False) and config.get("password"):
                 if keyring:
                     try:
-                        keyring.set_password(f"meridiana_db_{config['host']}", config['user'], config['password'])
-                        self.logger.info("Password salvata nel keyring di sistema.")
+                        keyring.set_password(
+                            f"meridiana_db_{config['host']}", config["user"], config["password"]
+                        )
+                        self.logger.info("Password DB salvata nel keyring.")
                     except Exception as e:
-                        self.logger.error(f"Impossibile salvare la password nel keyring: {e}")
-                        QMessageBox.warning(self, "Salvataggio Password Fallito", f"Impossibile salvare la password nel portachiavi di sistema:\n{e}")
-            
+                        self.logger.error(f"Impossibile salvare password DB nel keyring: {e}")
+                        QMessageBox.warning(self, "Salvataggio Password Fallito",
+                                            f"Impossibile salvare la password nel portachiavi:\n{e}")
+
             settings.sync()
             QMessageBox.information(self, "Successo", "Connessione riuscita e impostazioni salvate.")
             self.accept()
         else:
-            QMessageBox.critical(self, "Connessione Fallita", "Impossibile connettersi al database con i parametri forniti.\nControlla i dati e riprova.")
+            QMessageBox.critical(
+                self, "Connessione Fallita",
+                "Impossibile connettersi al database con i parametri forniti.\n"
+                "Controlla nome DB, utente e password."
+            )
 
     def _handle_cancel(self):
         """Gestisce il click su 'Annulla'."""
@@ -385,18 +543,30 @@ class DBConfigDialog(QDialog):
         self.settings.setValue(SETTINGS_DB_NAME, self.dbname_edit.text().strip())
         self.settings.setValue(SETTINGS_DB_USER, self.user_edit.text().strip())
         
-        # --- CORREZIONE: Rimuovi o correggi la riga che fa riferimento a schema_edit ---
-        # Opzione 1: Se non serve lo schema, rimuovi questa riga:
-        # self.settings.setValue(SETTINGS_DB_SCHEMA, self.schema_edit.text().strip() or "catasto")
-        
-        # Opzione 2: Se serve lo schema, usa un valore fisso:
-        self.settings.setValue(SETTINGS_DB_SCHEMA, "catasto")  # Valore fisso
-        
-        # --- FINE CORREZIONE ---
-        
-        # --- NUOVA LOGICA PER LA PASSWORD ---
+        self.settings.setValue(SETTINGS_DB_SCHEMA, "catasto")
+
+        # --- Impostazioni Tunnel SSH ---
+        ssh_enabled = self.ssh_enabled_check.isChecked()
+        self.settings.setValue(SETTINGS_SSH_ENABLED,  ssh_enabled)
+        self.settings.setValue(SETTINGS_SSH_HOST,     self.ssh_host_edit.text().strip())
+        self.settings.setValue(SETTINGS_SSH_PORT,     self.ssh_port_spinbox.value())
+        self.settings.setValue(SETTINGS_SSH_USER,     self.ssh_user_edit.text().strip())
+        self.settings.setValue(SETTINGS_SSH_USE_KEY,  self.ssh_auth_key_radio.isChecked())
+        self.settings.setValue(SETTINGS_SSH_KEY_PATH, self.ssh_key_path_edit.text().strip())
+
+        if ssh_enabled and keyring:
+            ssh_host = self.ssh_host_edit.text().strip()
+            ssh_user = self.ssh_user_edit.text().strip()
+            ssh_password = self.ssh_password_edit.text()
+            if ssh_password and ssh_host and ssh_user:
+                try:
+                    keyring.set_password(f"meridiana_ssh_{ssh_host}", ssh_user, ssh_password)
+                except Exception as e:
+                    self.logger.warning(f"Impossibile salvare password SSH nel keyring: {e}")
+        # --- Fine Impostazioni SSH ---
+
+        # --- NUOVA LOGICA PER LA PASSWORD DB ---
         if self.save_password_check.isChecked():
-            # Salva la password se la checkbox è spuntata
             self.settings.setValue(SETTINGS_DB_PASSWORD, self.password_edit.text())
         else:
             # Altrimenti, rimuovi la chiave per non salvarla
@@ -488,10 +658,18 @@ class DBConfigDialog(QDialog):
             "port": self.port_spinbox.value(),
             "dbname": self.dbname_edit.text().strip(),
             "user": self.user_edit.text().strip(),
-            "save_password": self.save_password_check.isChecked()
+            "save_password": self.save_password_check.isChecked(),
+            # SSH tunnel
+            "ssh_enabled":  self.ssh_enabled_check.isChecked(),
+            "ssh_host":     self.ssh_host_edit.text().strip(),
+            "ssh_port":     self.ssh_port_spinbox.value(),
+            "ssh_user":     self.ssh_user_edit.text().strip(),
+            "ssh_use_key":  self.ssh_auth_key_radio.isChecked(),
+            "ssh_key_path": self.ssh_key_path_edit.text().strip(),
         }
         if include_password:
             config["password"] = self.password_edit.text()
+            config["ssh_password"] = self.ssh_password_edit.text()
 
         return config
     

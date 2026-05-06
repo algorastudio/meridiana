@@ -33,6 +33,14 @@ SETTINGS_DB_SCHEMA = "Database/Schema"
 # Non salviamo la password in QSettings (Corretto! Ottima pratica di sicurezza)
 SETTINGS_DB_PASSWORD = "Database/Password"
 
+# --- Chiavi QSettings per il tunnel SSH ---
+SETTINGS_SSH_ENABLED  = "SSH/Enabled"
+SETTINGS_SSH_HOST     = "SSH/Host"
+SETTINGS_SSH_PORT     = "SSH/Port"
+SETTINGS_SSH_USER     = "SSH/User"
+SETTINGS_SSH_USE_KEY  = "SSH/UseKey"
+SETTINGS_SSH_KEY_PATH = "SSH/KeyPath"
+
 # --- COSTANTI TABELLE INTERFACCIA ---
 COLONNE_POSSESSORI_DETTAGLI_NUM = 6
 COLONNE_POSSESSORI_DETTAGLI_LABELS = [

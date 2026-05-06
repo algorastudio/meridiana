@@ -13,7 +13,13 @@ from PyQt5.QtWidgets import QApplication, QMessageBox, QDialog
 from catasto_db_manager import CatastoDBManager
 from app_utils import get_local_ip_address, get_password_from_keyring
 from app_paths import load_stylesheet, get_logo_path
-from config import SETTINGS_DB_TYPE, SETTINGS_DB_HOST, SETTINGS_DB_PORT, SETTINGS_DB_NAME, SETTINGS_DB_USER, SETTINGS_DB_SCHEMA, SETTINGS_DB_PASSWORD
+from config import (
+    SETTINGS_DB_TYPE, SETTINGS_DB_HOST, SETTINGS_DB_PORT,
+    SETTINGS_DB_NAME, SETTINGS_DB_USER, SETTINGS_DB_SCHEMA, SETTINGS_DB_PASSWORD,
+    SETTINGS_SSH_ENABLED, SETTINGS_SSH_HOST, SETTINGS_SSH_PORT,
+    SETTINGS_SSH_USER, SETTINGS_SSH_USE_KEY, SETTINGS_SSH_KEY_PATH,
+)
+from ssh_tunnel import start_ssh_tunnel, stop_ssh_tunnel
 from dialogs import DBConfigDialog, EulaDialog
 from gui_auth import LoginDialog
 from gui_widgets import WelcomeScreen
@@ -127,9 +133,36 @@ def run_gui_app():
             "port": settings.value(SETTINGS_DB_PORT, 5432, type=int),
             "dbname": settings.value(SETTINGS_DB_NAME, "catasto_storico", type=str),
             "user": settings.value(SETTINGS_DB_USER, "postgres", type=str),
-            "password": saved_password or ""  # Assicurati che ci sia sempre una password (anche vuota)
+            "password": saved_password or ""
         }
-        
+
+        # --- Avvio tunnel SSH (se configurato) ---
+        ssh_enabled = settings.value(SETTINGS_SSH_ENABLED, False, type=bool)
+        if ssh_enabled:
+            ssh_host     = settings.value(SETTINGS_SSH_HOST, "", type=str)
+            ssh_port     = settings.value(SETTINGS_SSH_PORT, 22, type=int)
+            ssh_user     = settings.value(SETTINGS_SSH_USER, "", type=str)
+            ssh_use_key  = settings.value(SETTINGS_SSH_USE_KEY, False, type=bool)
+            ssh_key_path = settings.value(SETTINGS_SSH_KEY_PATH, "", type=str)
+            ssh_password = get_password_from_keyring(f"meridiana_ssh_{ssh_host}", ssh_user) or ""
+
+            if ssh_host and ssh_user:
+                gui_logger.info(f"Avvio tunnel SSH verso {ssh_host}:{ssh_port}…")
+                local_port = start_ssh_tunnel(
+                    ssh_host=ssh_host, ssh_port=ssh_port, ssh_user=ssh_user,
+                    remote_db_host=saved_config["host"],
+                    remote_db_port=saved_config["port"],
+                    ssh_password=ssh_password if not ssh_use_key else None,
+                    ssh_key_path=ssh_key_path if ssh_use_key else None,
+                )
+                if local_port:
+                    saved_config["host"] = "127.0.0.1"
+                    saved_config["port"] = local_port
+                    gui_logger.info(f"Tunnel SSH attivo su porta locale {local_port}.")
+                else:
+                    gui_logger.warning("Tunnel SSH fallito — tentativo di connessione diretta.")
+        # --- Fine avvio tunnel SSH ---
+
         # Prova a connettere solo se sono presenti i dati essenziali E la password
         if saved_config["dbname"] and saved_config["user"] and saved_config["password"]:
             try:
@@ -169,14 +202,40 @@ def run_gui_app():
                     sys.exit(0)
 
                 current_config = config_dialog.get_config_values(include_password=True)
-                
+
+                db_host = current_config.get('host', 'localhost')
+                db_port = current_config.get('port', 5432)
+
+                # --- Avvio tunnel SSH per connessione manuale ---
+                if current_config.get("ssh_enabled") and current_config.get("ssh_host"):
+                    stop_ssh_tunnel()
+                    local_port = start_ssh_tunnel(
+                        ssh_host=current_config["ssh_host"],
+                        ssh_port=current_config["ssh_port"],
+                        ssh_user=current_config["ssh_user"],
+                        remote_db_host=db_host,
+                        remote_db_port=db_port,
+                        ssh_password=current_config.get("ssh_password") if not current_config.get("ssh_use_key") else None,
+                        ssh_key_path=current_config.get("ssh_key_path") if current_config.get("ssh_use_key") else None,
+                    )
+                    if local_port:
+                        db_host = "127.0.0.1"
+                        db_port = local_port
+                        gui_logger.info(f"Tunnel SSH attivo su porta locale {local_port}.")
+                    else:
+                        QMessageBox.critical(None, "Errore Tunnel SSH",
+                                             "Impossibile aprire il tunnel SSH.\n"
+                                             "Controlla i parametri SSH e riprova.")
+                        continue
+                # --- Fine avvio tunnel SSH ---
+
                 # --- CORREZIONE: Filtra solo i parametri supportati da CatastoDBManager ---
                 db_manager_params = {
-                    'host': current_config.get('host'),
-                    'port': current_config.get('port'), 
+                    'host': db_host,
+                    'port': db_port,
                     'dbname': current_config.get('dbname'),
                     'user': current_config.get('user'),
-                    'password': current_config.get('password', '')  # Assicurati che ci sia sempre una password
+                    'password': current_config.get('password', '')
                 }
                 
                 # Rimuovi eventuali chiavi con valore None (ma mantieni password vuota se necessario)
@@ -252,6 +311,7 @@ def run_gui_app():
             login_dialog.current_session_id_from_dialog
         )
         
+        app.aboutToQuit.connect(stop_ssh_tunnel)
         gui_logger.info("Setup completato. Avvio loop eventi.")
         sys.exit(app.exec_())
 
