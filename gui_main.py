@@ -8,7 +8,6 @@ Autore: Marco Santoro
 Data: 21/04/2026
 Versione: 1.3.0
 """
-print("DEBUG: gui_main.py starting...", flush=True)
 import sys,bcrypt
 import zipfile
 import os
