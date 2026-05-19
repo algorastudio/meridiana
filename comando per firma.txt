@@ -1,0 +1,1 @@
+signtool sign /n "MARCO SANTORO" /tr http://time.certum.pl/ /td sha256 /fd sha256 /a "C:\Users\saint\meridiana\Installer\Meridiana_1.3.0_Setup.exe"    
